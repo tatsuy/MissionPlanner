@@ -182,8 +182,11 @@ namespace MissionPlanner.Utilities
                                         miss++;
                                     }
                                 }
-                                System.Threading.Thread.Sleep(2);
+                                System.Threading.Thread.Sleep(1);
                             }
+
+                            //cleanup on disconnect
+                            FlightData.myhud.bgimage = null;
                         }
                     }
                 }
@@ -199,7 +202,10 @@ namespace MissionPlanner.Utilities
             try
             {
                 if (process != null)
+                {
+                    process.Kill();
                     process.Close();
+                }
             }
             catch { }
         }
