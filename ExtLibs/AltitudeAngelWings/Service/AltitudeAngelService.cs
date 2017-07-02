@@ -85,12 +85,12 @@ namespace AltitudeAngelWings.Service
             _disposer.Add(_missionPlanner.FlightDataMap
                 .MapChanged
                 .Throttle(TimeSpan.FromSeconds(1))
-                .Subscribe(i => UpdateMapData(_missionPlanner.FlightDataMap)));
+                .Subscribe(async i => await UpdateMapData(_missionPlanner.FlightDataMap)));
 
             _disposer.Add(_missionPlanner.FlightPlanningMap
               .MapChanged
               .Throttle(TimeSpan.FromSeconds(1))
-              .Subscribe(i => UpdateMapData(_missionPlanner.FlightPlanningMap)));
+              .Subscribe(async i => await UpdateMapData(_missionPlanner.FlightPlanningMap)));
 
             try
             {
@@ -138,7 +138,7 @@ namespace AltitudeAngelWings.Service
             return null;
         }
 
-        public async Task RemoveOverlays()
+        public void RemoveOverlays()
         {
             _missionPlanner.FlightDataMap.DeleteOverlay("AAMapData.Air");
             _missionPlanner.FlightDataMap.DeleteOverlay("AAMapData.Ground");
@@ -283,6 +283,20 @@ namespace AltitudeAngelWings.Service
                     }
                         break;
                     case GeoJSONObjectType.MultiPolygon:
+                        if (!overlay.PolygonExists(feature.Id))
+                        {
+                            foreach (var poly in ((MultiPolygon) feature.Geometry).Coordinates)
+                            {
+                                List<PointLatLng> coordinates =
+                                    poly.Coordinates[0].Coordinates.OfType<GeographicPosition>()
+                                        .Select(c => new PointLatLng(c.Latitude, c.Longitude))
+                                        .ToList();
+
+                                ColorInfo colorInfo = feature.ToColorInfo();
+                                colorInfo.StrokeColor = 0xFFFF0000;
+                                overlay.AddPolygon(feature.Id, coordinates, colorInfo, feature);
+                            }
+                        }
                         break;
                     case GeoJSONObjectType.GeometryCollection:
                         break;
@@ -299,8 +313,8 @@ namespace AltitudeAngelWings.Service
 
         public PointLatLng newpos(PointLatLng input, double bearing, double distance)
         {
-            const float rad2deg = (float)(180 / Math.PI);
-            const float deg2rad = (float)(1.0 / rad2deg);
+            const double rad2deg = (180 / Math.PI);
+            const double deg2rad = (1.0 / rad2deg);
 
             // '''extrapolate latitude/longitude given a heading and distance 
             //   thanks to http://www.movable-type.co.uk/scripts/latlong.html

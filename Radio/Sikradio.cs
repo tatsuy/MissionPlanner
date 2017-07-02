@@ -262,7 +262,7 @@ S15: MAX_WINDOW=131
 
             try
             {
-                comPort.PortName = MainV2.comPort.BaseStream.PortName;
+                comPort.PortName = MainV2.comPortName;
                 comPort.BaudRate = 115200;
 
                 comPort.Open();
@@ -494,8 +494,8 @@ S15: MAX_WINDOW=131
                 }
                 else
                 {
-                    comPort.PortName = MainV2.comPort.BaseStream.PortName;
-                    comPort.BaudRate = MainV2.comPort.BaseStream.BaudRate;
+                    comPort.PortName = MainV2.comPortName;
+                    comPort.BaudRate = MainV2.comPortBaud;
                 }
 
                 comPort.ReadTimeout = 4000;
@@ -548,7 +548,7 @@ S15: MAX_WINDOW=131
                                         if (value != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "RT" + values[0].Trim() + "=" + value + "\r");
+                                                "RTS" + values[0].Trim().TrimStart('S') + "=" + value + "\r");
 
                                             if (cmdanswer.Contains("OK"))
                                             {
@@ -558,7 +558,7 @@ S15: MAX_WINDOW=131
                                                 if (values[1] == "ENCRYPTION_LEVEL")
                                                 {
                                                     // set this on the local radio as well.
-                                                    doCommand(comPort, "AT" + values[0].Trim() + "=" + value + "\r");
+                                                    doCommand(comPort, "ATS" + values[0].Trim().TrimStart('S') + "=" + value + "\r");
                                                     // both radios should now be using the default key
                                                 }
                                                 else
@@ -576,7 +576,7 @@ S15: MAX_WINDOW=131
                                         if (((ComboBox) controls[0]).SelectedValue.ToString() != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "RT" + values[0].Trim() + "=" + ((ComboBox) controls[0]).SelectedValue +
+                                                "RTS" + values[0].Trim().TrimStart('S') + "=" + ((ComboBox) controls[0]).SelectedValue +
                                                 "\r");
 
                                             if (cmdanswer.Contains("OK"))
@@ -593,7 +593,7 @@ S15: MAX_WINDOW=131
                                         if (controls[0].Text != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "RT" + values[0].Trim() + "=" + controls[0].Text + "\r");
+                                                "RTS" + values[0].Trim().TrimStart('S') + "=" + controls[0].Text + "\r");
 
                                             if (cmdanswer.Contains("OK"))
                                             {
@@ -641,7 +641,7 @@ S15: MAX_WINDOW=131
                                         if (value != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "AT" + values[0].Trim() + "=" + value + "\r");
+                                                "ATS" + values[0].Trim().TrimStart('S') + "=" + value + "\r");
 
                                             if (cmdanswer.Contains("OK"))
                                             {
@@ -660,7 +660,7 @@ S15: MAX_WINDOW=131
                                         if (((ComboBox) controls[0]).SelectedValue.ToString() != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "AT" + values[0].Trim() + "=" + ((ComboBox) controls[0]).SelectedValue +
+                                                "ATS" + values[0].Trim().TrimStart('S') + "=" + ((ComboBox) controls[0]).SelectedValue +
                                                 "\r");
 
                                             if (cmdanswer.Contains("OK"))
@@ -677,7 +677,7 @@ S15: MAX_WINDOW=131
                                         if (controls[0].Text != values[2].Trim())
                                         {
                                             var cmdanswer = doCommand(comPort,
-                                                "AT" + values[0].Trim() + "=" + controls[0].Text + "\r");
+                                                "ATS" + values[0].Trim().TrimStart('S') + "=" + controls[0].Text + "\r");
 
                                             if (cmdanswer.Contains("OK"))
                                             {
@@ -794,8 +794,8 @@ S15: MAX_WINDOW=131
                 }
                 else
                 {
-                    comPort.PortName = MainV2.comPort.BaseStream.PortName;
-                    comPort.BaudRate = MainV2.comPort.BaseStream.BaudRate;
+                    comPort.PortName = MainV2.comPortName;
+                    comPort.BaudRate = MainV2.comPortBaud;
                 }
 
                 comPort.ReadTimeout = 4000;
@@ -1231,8 +1231,8 @@ red LED solid - in firmware update mode");
 
             try
             {
-                comPort.PortName = MainV2.comPort.BaseStream.PortName;
-                comPort.BaudRate = MainV2.comPort.BaseStream.BaudRate;
+                comPort.PortName = MainV2.comPortName;
+                comPort.BaudRate = MainV2.comPortBaud;
 
                 comPort.ReadTimeout = 4000;
 

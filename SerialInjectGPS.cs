@@ -17,6 +17,9 @@ using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System.Globalization;
 using System.IO;
+using System.Runtime.Serialization;
+using System.Xml.Serialization;
+using Flurl.Util;
 
 namespace MissionPlanner
 {
@@ -32,6 +35,8 @@ namespace MissionPlanner
         private static Utilities.sbp sbp = new Utilities.sbp();
         // ubx detection
         private static Utilities.ubx_m8p ubx_m8p = new Utilities.ubx_m8p();
+
+        static nmea nmea = new nmea();
         // background thread 
         private static System.Threading.Thread t12;
         private static bool threadrun = false;
@@ -48,11 +53,17 @@ namespace MissionPlanner
 
         private PointLatLngAlt basepos = PointLatLngAlt.Zero;
 
+        [XmlElement(ElementName = "baseposList")]
+        List<PointLatLngAlt> baseposList = new List<PointLatLngAlt>();
+
         static private BinaryWriter basedata;
 
         // Thread signal. 
         public static ManualResetEvent tcpClientConnected = new ManualResetEvent(false);
         private static string status_line3;
+
+        private string basepostlistfile = Settings.GetUserDataDirectory() + Path.DirectorySeparatorChar +
+                                          "baseposlist.xml";
 
         public SerialInjectGPS()
         {
@@ -73,6 +84,8 @@ namespace MissionPlanner
                 BUT_connect.Text = Strings.Stop;
             }
 
+            splitContainer1.Panel1Collapsed = true;
+
             // restore last port and baud - its the simple things that make life better
             if (Settings.Instance.ContainsKey("SerialInjectGPS_port"))
             {
@@ -82,17 +95,149 @@ namespace MissionPlanner
             {
                 CMB_baudrate.Text = Settings.Instance["SerialInjectGPS_baud"];
             }
+            if (Settings.Instance.ContainsKey("SerialInjectGPS_SIAcc"))
+            {
+                txt_surveyinAcc.Text = Settings.Instance["SerialInjectGPS_SIAcc"];
+            }
+            if (Settings.Instance.ContainsKey("SerialInjectGPS_SITime"))
+            {
+                txt_surveyinDur.Text = Settings.Instance["SerialInjectGPS_SITime"];
+            }            
 
+            // restore current static state
             chk_rtcmmsg.Checked = rtcm_msg;
+
+            // restore setting
+            if(Settings.Instance.ContainsKey("SerialInjectGPS_m8pautoconfig"))
+                chk_m8pautoconfig.Checked = bool.Parse(Settings.Instance["SerialInjectGPS_m8pautoconfig"]);
+
+            if (Settings.Instance.ContainsKey("SerialInjectGPS_m8p_130p"))
+                chk_m8p_130p.Checked = bool.Parse(Settings.Instance["SerialInjectGPS_m8p_130p"]);
+
+            loadBasePosList();
 
             loadBasePOS();
 
+            rtcm3.ObsMessage += Rtcm3_ObsMessage;
+
             MissionPlanner.Utilities.Tracking.AddPage(this.GetType().ToString(), this.Text);
+        }
+
+        private void Rtcm3_ObsMessage(object sender, EventArgs e)
+        {
+            if (MainV2.instance.IsDisposed)
+                threadrun = false;
+
+            MainV2.instance.BeginInvoke((MethodInvoker) delegate
+            {
+                List<rtcm3.ob> obs = sender as List<rtcm3.ob>;
+
+                // get system controls
+                Func<char,List<VerticalProgressBar2>> ctls = delegate (char sys)
+                {
+                    return panel1.Controls.OfType<VerticalProgressBar2>()
+                        .Where(ctl => { return ctl.Label.StartsWith(sys + ""); }).ToList();
+                };
+
+                // we need more ctls for this system
+                while (ctls.Invoke(obs[0].sys).Count() < obs.Count)
+                    panel1.Controls.Add(new VerticalProgressBar2()
+                    {
+                        Height = panel1.Height - 30,
+                        Label = obs[0].sys + ""
+                    });
+
+                // we need to remove ctls for this system
+                while (ctls.Invoke(obs[0].sys).Count() > obs.Count)
+                {
+                    var list = ctls.Invoke(obs[0].sys);
+                    panel1.Controls.Remove(list.First());
+                    panel1.Controls.Remove(list.First().lbl);
+                    panel1.Controls.Remove(list.First().lbl1);
+                }
+
+                int width = panel1.Width/panel1.Controls.OfType<VerticalProgressBar2>().Count();
+
+                var tmp = ctls('G');
+                var tmp2 = ctls('R');
+                var tmp3 = ctls('C');
+
+                var start = 0;
+
+                if (obs[0].sys == 'G')
+                    start = 0;
+                if (obs[0].sys == 'R')
+                    start = tmp.Count;
+                if (obs[0].sys == 'C')
+                    start = tmp.Count + tmp2.Count;
+
+                // if G 0, if R = G.count (2 system support)
+                var a = start;
+
+                var sysctls = ctls.Invoke(obs[0].sys);
+                var cnt = 0;
+                foreach (var ob in obs)
+                {
+                    var vpb = sysctls[cnt];
+                    vpb.Value = (int) ob.snr;
+                    //vpb.Text = ob.snr.ToString();
+                    vpb.Label = ob.sys + ob.prn.ToString();
+                    vpb.Location = new Point(width*(a + cnt), 0);
+                    vpb.DrawLabel = true;
+                    vpb.Width = width;
+                    vpb.Height = panel1.Height-30;
+                    vpb.Minimum = 25;
+                    vpb.Maximum = 55;
+                    vpb.minline = 30;
+                    vpb.maxline = 99;
+                    cnt++;
+                }
+
+                ThemeManager.ApplyThemeTo(panel1);
+            }
+            );
         }
 
         ~SerialInjectGPS()
         {
             log.Info("destroy");
+        }
+
+        void loadBasePosList()
+        {
+            if (File.Exists(basepostlistfile))
+            {
+                //load config
+                System.Xml.Serialization.XmlSerializer reader =
+                    new System.Xml.Serialization.XmlSerializer(typeof (List<PointLatLngAlt>), new Type[] { typeof(Color) });
+
+                using (StreamReader sr = new StreamReader(basepostlistfile))
+                {
+                    try
+                    {
+                        baseposList = (List<PointLatLngAlt>) reader.Deserialize(sr);
+                    }
+                    catch (Exception ex)
+                    {
+                        log.Error(ex);
+                        CustomMessageBox.Show("Failed to load Base Position List\n" + ex.ToString(), Strings.ERROR);
+                    }
+                }
+            }
+
+            updateBasePosDG();
+        }
+
+        void saveBasePosList()
+        {
+            // save config
+            System.Xml.Serialization.XmlSerializer writer =
+                new System.Xml.Serialization.XmlSerializer(typeof(List<PointLatLngAlt>), new Type[] { typeof(Color) });
+
+            using (StreamWriter sw = new StreamWriter(basepostlistfile))
+            {
+                writer.Serialize(sw, baseposList);
+            }
         }
 
         public new void Show()
@@ -173,7 +318,30 @@ namespace MissionPlanner
                 {
                     comPort.ReadBufferSize = 1024*64;
 
-                    comPort.Open();
+
+                    try
+                    {
+                        comPort.Open();
+                    }
+                    catch (ArgumentException ex)
+                    {
+                        log.Error(ex);
+                        // try pipe method
+                        comPort = new CommsSerialPipe();
+                        comPort.PortName = CMB_serialport.Text;
+                        comPort.BaudRate = int.Parse(CMB_baudrate.Text);
+
+                        try
+                        {
+                            comPort.Open();
+                        }
+                        catch
+                        {
+                            comPort.Close();
+                            throw;
+                        }
+                    }
+
 
                     try
                     {
@@ -200,18 +368,14 @@ namespace MissionPlanner
                 {
                     this.LogInfo("Setup M8P");
 
-                    if (comPort is SerialPort)
-                    {
-                        comPort.BaudRate = 9600;
+                    ubx_m8p.SetupM8P(comPort, chk_m8p_130p.Checked);
 
-                        ubx_m8p.SetupM8P(comPort, basepos, int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
-                      double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture));
+                    if (basepos != PointLatLngAlt.Zero)
+                        ubx_m8p.SetupBasePos(comPort, basepos);
 
-                        comPort.BaudRate = 115200;
-                    }
+                    CMB_baudrate.Text = "115200";
 
-                    ubx_m8p.SetupM8P(comPort, basepos, int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
-                        double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture));
+                    this.LogInfo("Setup M8P done");
                 }
 
                 t12 = new System.Threading.Thread(new System.Threading.ThreadStart(mainloop))
@@ -225,10 +389,24 @@ namespace MissionPlanner
 
                 msgseen.Clear();
                 bytes = 0;
+                invalidateRTCMStatus();
+                panel1.Controls.Clear();
             }
         }
 
-        private void updateLabel(string line1, string line2, string line3)
+        void invalidateRTCMStatus()
+        {
+            if (ExpireType.HasExpired(labelbase))
+                labelbase.BackColor = Color.Red;
+            if (ExpireType.HasExpired(labelgps))
+                labelgps.BackColor = Color.Red;
+            if (ExpireType.HasExpired(labelglonass))
+                labelglonass.BackColor = Color.Red;
+            if (ExpireType.HasExpired(label14BDS))
+                label14BDS.BackColor = Color.Red;
+        }
+
+        private void updateLabel(string line1, string line2, string line3, string line4)
         {
             if (!this.IsDisposed)
             {
@@ -236,21 +414,10 @@ namespace MissionPlanner
                     (MethodInvoker)
                         delegate
                         {
-                            this.lbl_status.Text = line1 + '\n' + line2 + '\n' + line3;
-                        }
-                    );
-            }
-        }
-
-        private static void updateSVINLabel(string label, string line2 = "")
-        {
-            if (!Instance.IsDisposed)
-            {
-                Instance.BeginInvoke(
-                    (MethodInvoker)
-                        delegate
-                        {
-                            Instance.lbl_svin.Text = label + '\n' + line2;
+                            this.lbl_status1.Text = line1;
+                            this.lbl_status2.Text = line2;
+                            this.lbl_status3.Text = line3;
+                            this.labelmsgseen.Text = line4;
                         }
                     );
             }
@@ -335,6 +502,9 @@ namespace MissionPlanner
                             // rtcm
                             if ((seenmsg = rtcm3.Read(buffer[a])) > 0)
                             {
+                                sbp.resetParser();
+                                ubx_m8p.resetParser();
+                                nmea.resetParser();
                                 isrtcm = true;
                                 sendData(rtcm3.packet, (byte) rtcm3.length);
                                 bpsusefull += rtcm3.length;
@@ -344,10 +514,15 @@ namespace MissionPlanner
                                 msgseen[msgname] = (int) msgseen[msgname] + 1;
 
                                 ExtractBasePos(seenmsg);
+
+                                seenRTCM(seenmsg);
                             }
                             // sbp
                             if ((seenmsg = sbp.read(buffer[a])) > 0)
                             {
+                                rtcm3.resetParser();
+                                ubx_m8p.resetParser();
+                                nmea.resetParser();
                                 issbp = true;
                                 sendData(sbp.packet, (byte) sbp.length);
                                 bpsusefull += sbp.length;
@@ -359,11 +534,25 @@ namespace MissionPlanner
                             // ubx
                             if ((seenmsg = ubx_m8p.Read(buffer[a])) > 0)
                             {
+                                rtcm3.resetParser();
+                                sbp.resetParser();
+                                nmea.resetParser();
                                 ProcessUBXMessage();
                                 string msgname = "Ubx" + seenmsg.ToString("X4");
                                 if (!msgseen.ContainsKey(msgname))
                                     msgseen[msgname] = 0;
                                 msgseen[msgname] = (int) msgseen[msgname] + 1;
+                            }
+                            // nmea
+                            if((seenmsg = nmea.Read(buffer[a])) > 0)
+                            {
+                                rtcm3.resetParser();
+                                sbp.resetParser();
+                                ubx_m8p.resetParser();
+                                string msgname = "NMEA";
+                                if (!msgseen.ContainsKey(msgname))
+                                    msgseen[msgname] = 0;
+                                msgseen[msgname] = (int)msgseen[msgname] + 1;
                             }
                         }
                     }
@@ -377,6 +566,65 @@ namespace MissionPlanner
             }
         }
 
+        private static void seenRTCM(int seenmsg)
+        {
+            if (Instance.IsDisposed)
+                return;
+
+            Instance.BeginInvoke((Action) delegate()
+            {
+                switch (seenmsg)
+                {
+                    case 1001:
+                    case 1002:
+                    case 1003:
+                    case 1004:
+                    case 1071:
+                    case 1072:
+                    case 1073:
+                    case 1074:
+                    case 1075:
+                    case 1076:
+                    case 1077:
+                        Instance.labelgps.BackColor = Color.Green;
+                        ExpireType.Set(Instance.labelgps, 5);
+                        break;
+                    case 1005:
+                    case 1006:
+                        Instance.labelbase.BackColor = Color.Green;
+                        ExpireType.Set(Instance.labelbase, 20);
+                        break;
+                    case 1009:
+                    case 1010:
+                    case 1011:
+                    case 1012:
+                    case 1081:
+                    case 1082:
+                    case 1083:
+                    case 1084:
+                    case 1085:
+                    case 1086:
+                    case 1087:
+                        Instance.labelglonass.BackColor = Color.Green;
+                        ExpireType.Set(Instance.labelglonass, 5);
+                        break;
+                    case 1121:
+                    case 1122:
+                    case 1123:
+                    case 1124:
+                    case 1125:
+                    case 1126:
+                    case 1127:
+                        Instance.label14BDS.BackColor = Color.Green;
+                        ExpireType.Set(Instance.label14BDS, 5);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            );
+        }
+
         private static void ProcessUBXMessage()
         {
             try
@@ -386,57 +634,166 @@ namespace MissionPlanner
                 {
                     var svin = ubx_m8p.packet.ByteArrayToStructure<Utilities.ubx_m8p.ubx_nav_svin>(6);
 
-                    updateSVINLabel("Survey IN Valid: " + (svin.valid == 1) + " InProgress: " + (svin.active == 1) +
-                                    " Duration: " + svin.dur + " Obs: " + svin.obs + " Acc: " + svin.meanAcc / 10000.0);
+                    ubxsvin = svin;
 
-                    var X = svin.meanX/100.0 + svin.meanXHP*0.0001;
-                    var Y = svin.meanY/100.0 + svin.meanYHP*0.0001;
-                    var Z = svin.meanZ/100.0 + svin.meanZHP*0.0001;
+                    updateSVINLabel((svin.valid == 1), (svin.active == 1), svin.dur, svin.obs, svin.meanAcc / 10000.0);
 
-                    if (X == 0 || Y == 0 || Z == 0)
-                        return;
-
-                    var pos = new double[] {X, Y, Z};
+                    var pos = svin.getECEF();
 
                     double[] baseposllh = new double[3];
 
                     Utilities.rtcm3.ecef2pos(pos, ref baseposllh);
 
-                    MainV2.comPort.MAV.cs.MovingBase = new Utilities.PointLatLngAlt(baseposllh[0]*Utilities.rtcm3.R2D,
-                        baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2]);
+                    if(svin.valid == 1)
+                    {
+                        //MainV2.comPort.MAV.cs.MovingBase = new Utilities.PointLatLngAlt(baseposllh[0]*Utilities.rtcm3.R2D,
+                        //baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2]);
+                    }
 
-                    if (svin.valid == 1)
-                        ubx_m8p.turnon_off(comPort, 0x1, 0x3b, 0);
+                    //if (svin.valid == 1)
+                    //ubx_m8p.turnon_off(comPort, 0x1, 0x3b, 0);
                 }
-
-                //pvt
-                if (ubx_m8p.@class == 0x1 && ubx_m8p.subclass == 0x7)
+                else if (ubx_m8p.@class == 0x1 && ubx_m8p.subclass == 0x7)
                 {
                     var pvt = ubx_m8p.packet.ByteArrayToStructure<Utilities.ubx_m8p.ubx_nav_pvt>(6);
 
                     //MainV2.comPort.MAV.cs.MovingBase = new Utilities.PointLatLngAlt(pvt.lat / 1e7, pvt.lon / 1e7, pvt.height / 1000.0);
-
-
                 }
-
-                if (ubx_m8p.@class == 0x5 && ubx_m8p.subclass == 0x1)
+                else if (ubx_m8p.@class == 0x5 && ubx_m8p.subclass == 0x1)
                 {
                     log.InfoFormat("ubx ack {0} {1}", ubx_m8p.packet[6], ubx_m8p.packet[7]);
                 }
-
-                if (ubx_m8p.@class == 0x5 && ubx_m8p.subclass == 0x0)
+                else if (ubx_m8p.@class == 0x5 && ubx_m8p.subclass == 0x0)
                 {
                     log.InfoFormat("ubx Nack {0} {1}", ubx_m8p.packet[6], ubx_m8p.packet[7]);
                 }
-
-                if (ubx_m8p.@class == 0xa && ubx_m8p.subclass == 0x4)
+                else if (ubx_m8p.@class == 0xa && ubx_m8p.subclass == 0x4)
                 {
-                    log.InfoFormat("ubx mon-ver {0} {1}", ubx_m8p.packet[6], ubx_m8p.packet[7]);
+                    var ver = ubx_m8p.packet.ByteArrayToStructure<Utilities.ubx_m8p.ubx_mon_ver>(6);//, ubx_m8p.length - 8);
+
+                    Console.WriteLine("ubx mon-ver {0} {1}", ASCIIEncoding.ASCII.GetString(ver.hwVersion),
+                        ASCIIEncoding.ASCII.GetString(ver.swVersion));
+
+                    for (int a = 40 + 6; a < ubx_m8p.length-2; a += 30)
+                    {
+                        var extension = ASCIIEncoding.ASCII.GetString(ubx_m8p.buffer, a, 30);
+                        Console.WriteLine("ubx mon-ver {0}", extension);
+                    }
+                }
+                else if (ubx_m8p.@class == 0xa && ubx_m8p.subclass == 0x9)
+                {
+                    var hw = ubx_m8p.packet.ByteArrayToStructure<Utilities.ubx_m8p.ubx_mon_hw>(6);
+
+                    Console.WriteLine("ubx mon-hw noise {0} agc% {1} jam% {2} jamstate {3}", hw.noisePerMS, (hw.agcCnt/8191.0)*100.0, (hw.jamInd/256.0)*100,hw.flags & 0xc);
+                }
+                else if (ubx_m8p.@class == 0xf5)
+                {
+                    // rtcm
+                }
+                else if (ubx_m8p.@class == 0x02)
+                {
+                    // rxm-raw
+                }
+                else if (ubx_m8p.@class == 0x06 && ubx_m8p.subclass == 0x71)
+                {
+                    // TMODE3
+                    var tmode = ubx_m8p.packet.ByteArrayToStructure<Utilities.ubx_m8p.ubx_cfg_tmode3>(6);
+
+                    ubxmode = tmode;
+
+                    log.InfoFormat("ubx TMODE3 {0} {1}", (ubx_m8p.ubx_cfg_tmode3.modeflags) tmode.flags, "");
+                }
+                else
+                {
+                    ubx_m8p.turnon_off(comPort, ubx_m8p.@class, ubx_m8p.subclass, 0);
+                }
+
+                if(pollTMODE < DateTime.Now)
+                {
+                    ubx_m8p.poll_msg(comPort, 0x06, 0x71);
+                    pollTMODE = DateTime.Now.AddSeconds(60);
+
+                    ubx_m8p.poll_msg(comPort, 0x0a, 0x4);
                 }
             }
             catch (Exception ex)
             {
                 log.Error(ex);
+            }
+        }
+
+        static DateTime pollTMODE = DateTime.MinValue;
+        static ubx_m8p.ubx_cfg_tmode3 ubxmode;
+        static ubx_m8p.ubx_nav_svin ubxsvin;
+
+        private static void updateSVINLabel(bool valid, bool active, uint dur, uint obs, double acc)
+        {
+            if (!Instance.IsDisposed)
+            {
+                Instance.BeginInvoke(
+                    (MethodInvoker)
+                        delegate
+                        {
+                            if (Instance.basepos == PointLatLngAlt.Zero)
+                            {
+                                Instance.lbl_svin.Visible = true;
+                                Instance.label7.Visible = true;
+                                Instance.label8.Visible = true;
+                                Instance.label9.Visible = true;
+                                Instance.label10.Visible = true;
+
+                                Instance.lbl_svin.Text = valid ? "Postion is valid" : "Position is invalid";
+                                if (valid)
+                                    Instance.lbl_svin.BackColor = Color.Green;
+                                else
+                                    Instance.lbl_svin.BackColor = Color.Red;
+
+                                if (!valid)
+                                {
+                                    Instance.label7.Text = active
+                                        ? "In Progress"
+                                        : "Complete";
+                                    Instance.label8.Text = "Duration: " + dur;
+                                    Instance.label9.Text = "Observations: " + obs;
+                                }
+                                else
+                                {
+                                    double[] posllh = new double[3];
+
+                                    Utilities.rtcm3.ecef2pos(ubxsvin.getECEF(), ref posllh);
+
+                                    Instance.label7.Text = "Lat/X: " + posllh[0] * MathHelper.rad2deg;
+                                    Instance.label8.Text = "Lng/Y: " + posllh[1] * MathHelper.rad2deg;
+                                    Instance.label9.Text = "Alt/Z: " + posllh[2];
+                                    Instance.label7.Visible = true;
+                                    Instance.label8.Visible = true;
+                                    Instance.label9.Visible = true;
+                                }
+                                Instance.label10.Text = "Current Acc: "+acc;
+                            }
+                            else
+                            {
+                                Instance.lbl_svin.Visible = true;
+                                Instance.lbl_svin.Text = "Using " + (ubx_m8p.ubx_cfg_tmode3.modeflags)ubxmode.flags;
+                                Instance.lbl_svin.BackColor = Color.Green;
+                                Instance.label7.Visible = false;
+                                Instance.label8.Visible = false;
+                                Instance.label9.Visible = false;
+                                var pnt = ubxmode.getPointLatLngAlt();
+                                if (pnt != null)
+                                {
+                                    Instance.label7.Text = "Lat/X: " + pnt.Lat;
+                                    Instance.label8.Text = "Lng/Y: " + pnt.Lng;
+                                    Instance.label9.Text = "Alt/Z: " + pnt.Alt;
+                                    Instance.label7.Visible = true;
+                                    Instance.label8.Visible = true;
+                                    Instance.label9.Visible = true;
+                                }
+                            
+                                Instance.label10.Visible = false;
+                            }
+                        }
+                    );
             }
         }
 
@@ -459,8 +816,8 @@ namespace MissionPlanner
                         baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2]);
 
                     status_line3 =
-                        (String.Format("RTCM Base {0} {1} {2}", baseposllh[0]*Utilities.rtcm3.R2D,
-                            baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2]));
+                        (String.Format("{0} {1} {2} - {3}", baseposllh[0]*Utilities.rtcm3.R2D,
+                            baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2], DateTime.Now.ToString("HH:mm:ss")));
 
                     if (!Instance.IsDisposed && Instance.but_save_basepos.Enabled == false)
                         Instance.but_save_basepos.Enabled = true;
@@ -480,8 +837,8 @@ namespace MissionPlanner
                         baseposllh[2]);
 
                     status_line3 =
-                        (String.Format("RTCM Base {0} {1} {2}", baseposllh[0]*Utilities.rtcm3.R2D,
-                            baseposllh[1]*Utilities.rtcm3.R2D, baseposllh[2]));
+                       (String.Format("{0} {1} {2} - {3}", baseposllh[0] * Utilities.rtcm3.R2D,
+                           baseposllh[1] * Utilities.rtcm3.R2D, baseposllh[2], DateTime.Now.ToString("HH:mm:ss")));
 
                     if (!Instance.IsDisposed && Instance.but_save_basepos.Enabled == false)
                         Instance.but_save_basepos.Enabled = true;
@@ -526,9 +883,13 @@ namespace MissionPlanner
             {
             }
 
-            updateLabel(String.Format("{0,10} bytes {1,10} bps {2,10} bps sent", bytes, bps, bpsusefull), sb.ToString(), status_line3);
+            updateLabel(String.Format("{0,10} bps", bps),
+                String.Format("{0,10} bps sent", bpsusefull), status_line3,
+                sb.ToString() );
             bps = 0;
             bpsusefull = 0;
+
+            invalidateRTCMStatus();
 
             try
             {
@@ -562,29 +923,16 @@ namespace MissionPlanner
             {
                 string[] bspos = Settings.Instance["base_pos"].Split(',');
 
+                log.Info("basepos: "+ Settings.Instance["base_pos"].ToString());
+
                 basepos = new PointLatLngAlt(double.Parse(bspos[0], CultureInfo.InvariantCulture),
                     double.Parse(bspos[1], CultureInfo.InvariantCulture),
-                    double.Parse(bspos[2], CultureInfo.InvariantCulture));
+                    double.Parse(bspos[2], CultureInfo.InvariantCulture), 
+                    bspos[3]);
             }
             catch
             {
                 basepos = PointLatLngAlt.Zero;
-            }
-        }
-
-        private void but_base_pos_Click(object sender, EventArgs e)
-        {
-            string basepos = Settings.Instance["base_pos"];
-            if (InputBox.Show("Base POS", "Please enter base pos location 'lat,lng,alt,name'", ref basepos) ==
-                DialogResult.OK)
-            {
-                Settings.Instance["base_pos"] = basepos;
-
-                loadBasePOS();
-            }
-            else
-            {
-                this.basepos = PointLatLngAlt.Zero;
             }
         }
 
@@ -603,7 +951,142 @@ namespace MissionPlanner
                 var basepos = MainV2.comPort.MAV.cs.MovingBase;
                 Settings.Instance["base_pos"] = String.Format("{0},{1},{2},{3}", basepos.Lat.ToString(CultureInfo.InvariantCulture), basepos.Lng.ToString(CultureInfo.InvariantCulture), basepos.Alt.ToString(CultureInfo.InvariantCulture),
                     location);
+
+                baseposList.Add(new PointLatLngAlt(basepos) {Tag = location});
+
+                updateBasePosDG();
             }
+        }
+
+        private void chk_m8pautoconfig_CheckedChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["SerialInjectGPS_m8pautoconfig"] = chk_m8pautoconfig.Checked.ToString();
+
+            if (chk_m8pautoconfig.Checked)
+                splitContainer1.Panel1Collapsed = false;
+            else
+                splitContainer1.Panel1Collapsed = true;
+        }
+
+        void updateBasePosDG()
+        {
+            if (baseposList.Count == 0)
+                return;
+
+            //dont trigger on clear
+            dg_basepos.RowsRemoved -= dg_basepos_RowsRemoved;
+            dg_basepos.Rows.Clear();
+            dg_basepos.RowsRemoved += dg_basepos_RowsRemoved;
+
+            foreach (var pointLatLngAlt in baseposList)
+            {
+                dg_basepos.Rows.Add(pointLatLngAlt.Lat.ToInvariantString(), pointLatLngAlt.Lng.ToInvariantString(), pointLatLngAlt.Alt.ToInvariantString(), pointLatLngAlt.Tag,"Use","Delete");
+            }
+
+            saveBasePosList();
+        }
+
+        private void dg_basepos_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == Use.Index)
+            {
+                Settings.Instance["base_pos"] = String.Format("{0},{1},{2},{3}",
+                    dg_basepos[Lat.Index, e.RowIndex].Value.ToInvariantString(),
+                    dg_basepos[Long.Index, e.RowIndex].Value.ToInvariantString(),
+                    dg_basepos[Alt.Index, e.RowIndex].Value.ToInvariantString(),
+                    dg_basepos[BaseName1.Index, e.RowIndex].Value);
+
+                loadBasePOS();
+
+                if (comPort.IsOpen)
+                {
+                    ubx_m8p.SetupBasePos(comPort, basepos, int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
+                        double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture));
+
+                    ubx_m8p.poll_msg(comPort, 0x06, 0x71);
+                }
+            }
+            if (e.ColumnIndex == Delete.Index)
+            {
+                dg_basepos.Rows.RemoveAt(e.RowIndex);
+            }
+        }
+
+        private void dg_basepos_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        {
+            while (baseposList.Count <= e.RowIndex)
+                baseposList.Add(new PointLatLngAlt());
+
+            if (e.ColumnIndex == Lat.Index)
+            {
+                baseposList[e.RowIndex].Lat = double.Parse(dg_basepos[e.ColumnIndex, e.RowIndex].Value.ToString());
+            }
+            if (e.ColumnIndex == Long.Index)
+            {
+                baseposList[e.RowIndex].Lng = double.Parse(dg_basepos[e.ColumnIndex, e.RowIndex].Value.ToString());
+            }
+            if (e.ColumnIndex == Alt.Index)
+            {
+                baseposList[e.RowIndex].Alt = double.Parse(dg_basepos[e.ColumnIndex, e.RowIndex].Value.ToString());
+            }
+            if (e.ColumnIndex == BaseName1.Index)
+            {
+                baseposList[e.RowIndex].Tag = dg_basepos[e.ColumnIndex, e.RowIndex].Value.ToString();
+            }
+
+            saveBasePosList();
+        }
+
+        private void dg_basepos_RowsRemoved(object sender, DataGridViewRowsRemovedEventArgs e)
+        {
+            if (baseposList.Count == 0)
+                return;
+
+            baseposList.RemoveAt(e.RowIndex);
+
+            saveBasePosList();
+        }
+
+        private void chk_m8p_130p_CheckedChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["SerialInjectGPS_m8p_130p"] = chk_m8p_130p.Checked.ToString();
+        }
+
+        private void txt_surveyinAcc_TextChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["SerialInjectGPS_SIAcc"] = txt_surveyinAcc.Text.ToString();
+        }
+
+        private void txt_surveyinDur_TextChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["SerialInjectGPS_SITime"] = txt_surveyinDur.Text.ToString();
+        }
+
+        private void but_restartsvin_Click(object sender, EventArgs e)
+        {
+            basepos = PointLatLngAlt.Zero;
+            invalidateRTCMStatus();
+
+            msgseen.Clear();
+
+            if (comPort.IsOpen)
+            {
+                ubx_m8p.SetupBasePos(comPort, basepos, 0, 0, true);
+
+                ubx_m8p.SetupBasePos(comPort, basepos, int.Parse(txt_surveyinDur.Text, CultureInfo.InvariantCulture),
+                    double.Parse(txt_surveyinAcc.Text, CultureInfo.InvariantCulture));
+            }
+        }
+
+        private void dg_basepos_DefaultValuesNeeded(object sender, DataGridViewRowEventArgs e)
+        {
+            e.Row.Cells[Use.Index].Value = "Use";
+            e.Row.Cells[Delete.Index].Value = "Delete";
+        }
+
+        private void labelmsgseen_Click(object sender, EventArgs e)
+        {
+            msgseen.Clear();
         }
     }
 }

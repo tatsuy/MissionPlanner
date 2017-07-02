@@ -18,9 +18,6 @@ namespace MissionPlanner
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        const float rad2deg = (float) (180/Math.PI);
-        const float deg2rad = (float) (1.0/rad2deg);
-
         static double error = 99;
         static double error2 = 99;
         static double error3 = 99;
@@ -188,6 +185,8 @@ namespace MissionPlanner
 
         static List<Tuple<float, float, float>> datacompass3 = new List<Tuple<float, float, float>>();
 
+        private static object _locker = new object();
+
         static bool ReceviedPacket(MAVLink.MAVLinkMessage rawpacket)
         {
             if (rawpacket.msgid == (byte) MAVLink.MAVLINK_MSG_ID.SCALED_IMU2)
@@ -217,7 +216,7 @@ namespace MissionPlanner
                 float rawmz = packet.zmag;
 
                 // add data
-                lock (datacompass2)
+                lock (_locker)
                 {
                     if (rawmx == 0 || rawmy == 0 || rawmz == 0)
                         return true;
@@ -254,7 +253,7 @@ namespace MissionPlanner
                 float rawmz = packet.zmag;
 
                 // add data
-                lock (datacompass3)
+                lock (_locker)
                 {
                     if (rawmx == 0 || rawmy == 0 || rawmz == 0)
                         return true;
@@ -294,7 +293,7 @@ namespace MissionPlanner
                 float rawmz = packet.zmag - (float) MainV2.comPort.MAV.cs.mag_ofs_z;
 
                 // add data
-                lock (datacompass1)
+                lock (_locker)
                 {
                     datacompass1.Add(new Tuple<float, float, float>(rawmx, rawmy, rawmz));
                 }
@@ -423,7 +422,7 @@ namespace MissionPlanner
                     MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.RAW_SENSORS, 50);
 
                     lastlsq = DateTime.Now;
-                    lock (datacompass1)
+                    lock (_locker)
                     {
                         var lsq = MagCalib.LeastSq(datacompass1, false);
                         // simple validation
@@ -442,7 +441,7 @@ namespace MissionPlanner
                 if (datacompass2.Count > 100 && lastlsq2.Second != DateTime.Now.Second)
                 {
                     lastlsq2 = DateTime.Now;
-                    lock (datacompass2)
+                    lock (_locker)
                     {
                         var lsq = MagCalib.LeastSq(datacompass2, false);
                         // simple validation
@@ -461,7 +460,7 @@ namespace MissionPlanner
                 if (datacompass3.Count > 100 && lastlsq3.Second != DateTime.Now.Second)
                 {
                     lastlsq3 = DateTime.Now;
-                    lock (datacompass3)
+                    lock (_locker)
                     {
                         var lsq = MagCalib.LeastSq(datacompass3, false);
                         // simple validation
@@ -542,7 +541,7 @@ namespace MissionPlanner
                             (float) (Math.Sin(theta)*Math.Sin(phi)*radius),
                             (float) (Math.Cos(theta)*radius)) - centre;
 
-                        //log.InfoFormat("magcalib check - {0} {1} dist {2}", theta * rad2deg, phi * rad2deg, max_distance);
+                        //log.InfoFormat("magcalib check - {0} {1} dist {2}", theta * MathHelper.rad2deg, phi * MathHelper.rad2deg, max_distance);
 
                         bool found = false;
                         for (int k = 0; k < datacompass1.Count; k++)
@@ -561,7 +560,7 @@ namespace MissionPlanner
                         if (!found)
                         {
                             displayresult = "more data needed Aim For " +
-                                            GetColour((int) (theta*rad2deg), (int) (phi*rad2deg));
+                                            GetColour((int) (theta*MathHelper.rad2deg), (int) (phi*MathHelper.rad2deg));
                             ((ProgressReporterSphere) sender).sphere1.AimFor(new OpenTK.Vector3((float) point_sphere.x,
                                 (float) point_sphere.y, (float) point_sphere.z));
                             //j = factor;
@@ -1154,7 +1153,7 @@ namespace MissionPlanner
                         MainV2.comPort.GetParam("COMPASS_OFS_Z");
                     }
 
-                    if (ofs.Length > 3)
+                    if (ofs.Length > 3 && MainV2.comPort.MAV.param.ContainsKey("COMPASS_DIA_X"))
                     {
                         // ellipsoid
                         MainV2.comPort.setParam("COMPASS_DIA_X", (float)ofs[3]);
@@ -1209,7 +1208,7 @@ namespace MissionPlanner
                         MainV2.comPort.GetParam("COMPASS_OFS2_Y");
                         MainV2.comPort.GetParam("COMPASS_OFS2_Z");
                     }
-                    if (ofs.Length > 3)
+                    if (ofs.Length > 3 && MainV2.comPort.MAV.param.ContainsKey("COMPASS_DIA2_X"))
                     {
                         // ellipsoid
                         MainV2.comPort.setParam("COMPASS_DIA2_X", (float)ofs[3]);
@@ -1252,7 +1251,7 @@ namespace MissionPlanner
                         MainV2.comPort.setParam("COMPASS_OFS3_Y", (float)ofs[1]);
                         MainV2.comPort.setParam("COMPASS_OFS3_Z", (float)ofs[2]);
                     }
-                    if (ofs.Length > 3)
+                    if (ofs.Length > 3 && MainV2.comPort.MAV.param.ContainsKey("COMPASS_DIA3_X"))
                     {
                         // ellipsoid
                         MainV2.comPort.setParam("COMPASS_DIA3_X", (float)ofs[3]);

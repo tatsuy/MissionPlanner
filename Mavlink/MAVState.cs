@@ -1,13 +1,10 @@
 ﻿using System;
-using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 using GMap.NET;
 using log4net;
 using MissionPlanner.Utilities;
-using System.Collections.Concurrent;
 
 namespace MissionPlanner
 {
@@ -22,8 +19,8 @@ namespace MissionPlanner
             this.parent = mavLinkInterface;
             this.sysid = sysid;
             this.compid = compid;
-            this.packetspersecond = new double[0x100];
-            this.packetspersecondbuild = new DateTime[0x100];
+            this.packetspersecond = new Dictionary<uint, double>();
+            this.packetspersecondbuild = new Dictionary<uint, DateTime>();
             this.lastvalidpacket = DateTime.MinValue;
             sendlinkid = (byte)(new Random().Next(256));
             signing = false;
@@ -36,7 +33,7 @@ namespace MissionPlanner
             this.SoftwareVersions = "";
             this.SerialString = "";
             this.FrameString = "";
-            if(sysid != 255 && !(compid == 0 && sysid == 0) && !parent.logreadmode)
+            if (sysid != 255 && !(compid == 0 && sysid == 0)) // && !parent.logreadmode)
                 this.Proximity = new Proximity(this);
 
             camerapoints.Clear();
@@ -170,12 +167,12 @@ namespace MissionPlanner
         /// <summary>
         /// used to calc packets per second on any single message type - used for stream rate comparaison
         /// </summary>
-        public double[] packetspersecond { get; set; }
+        public Dictionary<uint,double> packetspersecond { get; set; }
 
         /// <summary>
         /// time last seen a packet of a type
         /// </summary>
-        public DateTime[] packetspersecondbuild = new DateTime[256];
+        public Dictionary<uint, DateTime> packetspersecondbuild { get; set; }
 
         /// <summary>
         /// mavlink ap type
@@ -214,5 +211,11 @@ namespace MissionPlanner
         public Proximity Proximity;
 
         internal int recvpacketcount = 0;
+        public Int64 time_offset_ns { get; set; }
+
+        public override string ToString()
+        {
+            return sysid.ToString();
+        }
     }
 }

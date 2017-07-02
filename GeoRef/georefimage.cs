@@ -40,10 +40,6 @@ namespace MissionPlanner.GeoRef
 
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        // CONSTS
-        private const float rad2deg = (float) (180/Math.PI);
-        private const float deg2rad = (float) (1.0/rad2deg);
-
         // Key = path of file, Value = object with picture information
         private Dictionary<string, PictureInformation> picturesInfo;
 
@@ -1305,7 +1301,7 @@ namespace MissionPlanner.GeoRef
             JXL_StationIDs.Add(photoStationID);
 
             // conver tto rads
-            yaw = -yaw*deg2rad;
+            yaw = -yaw*MathHelper.deg2rad;
 
             swloctrim.WriteStartElement("PhotoStationRecord");
             swloctrim.WriteAttributeString("ID", (photoStationID).ToString("0000000"));
@@ -1424,12 +1420,12 @@ namespace MissionPlanner.GeoRef
 
         public static double radians(double val)
         {
-            return val*deg2rad;
+            return val*MathHelper.deg2rad;
         }
 
         public static double degrees(double val)
         {
-            return val*rad2deg;
+            return val*MathHelper.rad2deg;
         }
 
         private void newpos(ref double lat, ref double lon, double bearing, double distance)
@@ -1599,23 +1595,29 @@ namespace MissionPlanner.GeoRef
 
 
             GMapRoute route = new GMapRoute("vehicle");
-            foreach (var vehicleLocation in vehicleLocations)
+            if (vehicleLocations != null)
             {
-                route.Points.Add(new PointLatLngAlt(vehicleLocation.Value.Lat, vehicleLocation.Value.Lon,
-                    vehicleLocation.Value.AltAMSL));
+                foreach (var vehicleLocation in vehicleLocations)
+                {
+                    route.Points.Add(new PointLatLngAlt(vehicleLocation.Value.Lat, vehicleLocation.Value.Lon,
+                        vehicleLocation.Value.AltAMSL));
+                }
             }
 
             myGMAP1.Overlays[0].Markers.Clear();
-            foreach (var pictureLocation in picturesInfo)
+            if (picturesInfo != null)
             {
-                myGMAP1.Overlays[0].Markers.Add(
-                    new GMarkerGoogle(new PointLatLngAlt(pictureLocation.Value.Lat, pictureLocation.Value.Lon,
-                        pictureLocation.Value.AltAMSL), GMarkerGoogleType.green)
-                    {
-                        IsHitTestVisible = true,
-                        ToolTipMode = MarkerTooltipMode.OnMouseOver,
-                        ToolTipText = Path.GetFileName(pictureLocation.Value.Path)
-                    });
+                foreach (var pictureLocation in picturesInfo)
+                {
+                    myGMAP1.Overlays[0].Markers.Add(
+                        new GMarkerGoogle(new PointLatLngAlt(pictureLocation.Value.Lat, pictureLocation.Value.Lon,
+                            pictureLocation.Value.AltAMSL), GMarkerGoogleType.green)
+                        {
+                            IsHitTestVisible = true,
+                            ToolTipMode = MarkerTooltipMode.OnMouseOver,
+                            ToolTipText = Path.GetFileName(pictureLocation.Value.Path)
+                        });
+                }
             }
 
             myGMAP1.Overlays[0].Routes.Clear();
@@ -1787,7 +1789,7 @@ namespace MissionPlanner.GeoRef
             using (MemoryStream ms = new MemoryStream(File.ReadAllBytes(Filename)))
             {
                 TXT_outputlog.AppendText("GeoTagging " + Filename + "\n");
-                Application.DoEvents();
+                TXT_outputlog.Refresh();
                 try
                 {
                     using (Image Pic = Image.FromStream(ms))

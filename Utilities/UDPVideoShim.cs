@@ -1,19 +1,29 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Pipes;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using log4net;
 
 namespace MissionPlanner.Utilities
 {
     public class UDPVideoShim
     {
+        private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
+
         private static UdpClient client;
+        private static UdpClient client2;
+        private static UdpClient client3;
         private static TcpClient tcpclient;
+        private static Process gst;
 
         static UDPVideoShim()
         {
@@ -22,7 +32,28 @@ namespace MissionPlanner.Utilities
                 client = new UdpClient(5600, AddressFamily.InterNetwork);
                 client.BeginReceive(clientdata, client);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
+            try
+            {
+                client2 = new UdpClient(5000, AddressFamily.InterNetwork);
+                client2.BeginReceive(clientdata, client2);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
+            try
+            {
+                client3 = new UdpClient(5100, AddressFamily.InterNetwork);
+                client3.BeginReceive(clientdata, client3);
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
         }
 
         ~UDPVideoShim()
@@ -38,7 +69,10 @@ namespace MissionPlanner.Utilities
                     client.Close();
                 client = null;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
 
             try
             {
@@ -46,40 +80,69 @@ namespace MissionPlanner.Utilities
                     tcpclient.Close();
                 tcpclient = null;
             }
-            catch { }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
 
             try
             {
-                GStreamer.Stop();
+                GStreamer.Stop(gst);
             }
-            catch { }
+            catch (Exception ex)
+            {
+                log.Error(ex);
+            }
         }
 
         private static void clientdata(IAsyncResult ar)
         {
-            if(client != null)
+            var client = ((UdpClient) ar.AsyncState);
+
+            if (client == null || client.Client == null)
+                return;
+
+            var port = ((IPEndPoint)client.Client.LocalEndPoint).Port;
+
+            if (client != null)
                 client.Close();
+
+            //removeme
+            GStreamer.LookForGstreamer();
 
             if (!File.Exists(GStreamer.gstlaunch))
             {
-                if (CustomMessageBox.Show("A video stream has been detected, but gstreamer has not been configured/installed.\nDo you want to config it now","GStreamer", System.Windows.Forms.MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
-                {
-                    if (GStreamer.getGstLaunchExe())
-                    {
+                var gstpath = GStreamer.LookForGstreamer();
 
+                if (File.Exists(gstpath))
+                {
+                    GStreamer.gstlaunch = gstpath;
+                }
+                else
+                {
+                    if (CustomMessageBox.Show("A video stream has been detected, but gstreamer has not been configured/installed.\nDo you want to install/config it now?", "GStreamer", System.Windows.Forms.MessageBoxButtons.YesNo) == System.Windows.Forms.DialogResult.Yes)
+                    {
+                        CustomMessageBox.Show(
+                            "Please download gstreamer 1.9.2 from [link;HERE;https://gstreamer.freedesktop.org/data/pkg/windows/1.9.2/gstreamer-1.0-x86-1.9.2.msi]\n And install it using the 'COMPLETE' option");
+
+                        if (GStreamer.getGstLaunchExe())
+                        {
+
+                        }
+                        else
+                        {
+                            return;
+                        }
                     }
                     else
                     {
                         return;
                     }
                 }
-                else
-                {
-                    return;
-                }
             }
 
-            GStreamer.Start();
+            GStreamer.UdpPort = port;
+            gst = GStreamer.Start();
         }
 
         public static void Start()
@@ -98,8 +161,9 @@ namespace MissionPlanner.Utilities
                     tcpclient = new TcpClient("10.1.1.1", 5502);
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                log.Error(ex);
             }
         }
 
@@ -120,8 +184,9 @@ namespace MissionPlanner.Utilities
                     return false;
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                log.Error(ex);
                 return false;
             }
         }

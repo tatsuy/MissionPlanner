@@ -22,7 +22,7 @@ namespace MissionPlanner {
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("System.Resources.Tools.StronglyTypedResourceBuilder", "4.0.0.0")]
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
-    public class Strings {
+    public partial class Strings {
         
         private static global::System.Resources.ResourceManager resourceMan;
         
@@ -1359,7 +1359,7 @@ namespace MissionPlanner {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to This board has been retired, Mission Planner this will upload the last available version to your board.
+        ///   Looks up a localized string similar to This board has been retired, Mission Planner this will upload the last available version to your board (AC 3.2.1/AP 3.4.0).
         /// </summary>
         public static string ThisBoardHasBeenRetired {
             get {

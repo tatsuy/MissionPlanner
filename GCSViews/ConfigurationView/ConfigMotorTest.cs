@@ -49,7 +49,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 but.Click += but_Click;
                 but.Tag = a;
 
-                Controls.Add(but);
+                groupBox1.Controls.Add(but);
 
                 y += 25;
             }
@@ -59,7 +59,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             but.Location = new Point(x, y);
             but.Size = new Size(75, 37);
             but.Click += but_TestAll;
-            Controls.Add(but);
+            groupBox1.Controls.Add(but);
 
             y += 39;
 
@@ -68,7 +68,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             but.Location = new Point(x, y);
             but.Size = new Size(75, 37);
             but.Click += but_StopAll;
-            Controls.Add(but);
+            groupBox1.Controls.Add(but);
 
             y += 39;
 
@@ -77,7 +77,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             but.Location = new Point(x, y);
             but.Size = new Size(75, 37);
             but.Click += but_TestAllSeq;
-            Controls.Add(but);
+            groupBox1.Controls.Add(but);
 
             Utilities.ThemeManager.ApplyThemeTo(this);
         }
@@ -103,16 +103,22 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 switch (value)
                 {
                     case 0:
+                    case 1:
                         type = MAVLink.MAV_TYPE.QUADROTOR;
                         break;
-                    case 1:
+                    case 2:
+                    case 5:
                         type = MAVLink.MAV_TYPE.HEXAROTOR;
                         break;
-                    case 2:
+                    case 3:
+                    case 4:
                         type = MAVLink.MAV_TYPE.OCTOROTOR;
                         break;
-                    case 3:
-                        type = MAVLink.MAV_TYPE.OCTOROTOR;
+                    case 6:
+                        type = MAVLink.MAV_TYPE.HELICOPTER;
+                        break;
+                    case 7:
+                        type = MAVLink.MAV_TYPE.TRICOPTER;
                         break;
                 }
 

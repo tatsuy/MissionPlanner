@@ -46,7 +46,7 @@
             this.BUT_movingbase = new MissionPlanner.Controls.MyButton();
             this.but_getfw = new MissionPlanner.Controls.MyButton();
             this.but_mavserialport = new MissionPlanner.Controls.MyButton();
-            this.button3 = new System.Windows.Forms.Button();
+            this.button3 = new MissionPlanner.Controls.MyButton();
             this.BUT_shptopoly = new MissionPlanner.Controls.MyButton();
             this.but_gimbaltest = new MissionPlanner.Controls.MyButton();
             this.but_maplogs = new MissionPlanner.Controls.MyButton();
@@ -94,7 +94,6 @@
             this.myButton2 = new MissionPlanner.Controls.MyButton();
             this.BUT_magfit2 = new MissionPlanner.Controls.MyButton();
             this.but_gpsinj = new MissionPlanner.Controls.MyButton();
-            this.but_AA = new MissionPlanner.Controls.MyButton();
             this.controlSensorsStatus1 = new MissionPlanner.Controls.ControlSensorsStatus();
             this.but_followswarm = new MissionPlanner.Controls.MyButton();
             this.myButton3 = new MissionPlanner.Controls.MyButton();
@@ -246,16 +245,7 @@
             this.BUT_followleader.UseVisualStyleBackColor = true;
             this.BUT_followleader.Click += new System.EventHandler(this.BUT_followleader_Click);
             // 
-            // BUT_driverclean
-            // 
-            this.BUT_driverclean.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.BUT_driverclean.Location = new System.Drawing.Point(3, 318);
-            this.BUT_driverclean.Name = "BUT_driverclean";
-            this.BUT_driverclean.Size = new System.Drawing.Size(113, 15);
-            this.BUT_driverclean.TabIndex = 36;
-            this.BUT_driverclean.Text = "Driver Clean";
-            this.BUT_driverclean.UseVisualStyleBackColor = true;
-            this.BUT_driverclean.Click += new System.EventHandler(this.BUT_driverclean_Click);
+ 
             // 
             // BUT_sorttlogs
             // 
@@ -303,7 +293,6 @@
             // 
             // button3
             // 
-            this.button3.Dock = System.Windows.Forms.DockStyle.Fill;
             this.button3.Location = new System.Drawing.Point(0, 21);
             this.button3.Margin = new System.Windows.Forms.Padding(0);
             this.button3.Name = "button3";
@@ -842,16 +831,6 @@
             this.but_gpsinj.UseVisualStyleBackColor = true;
             this.but_gpsinj.Click += new System.EventHandler(this.but_gpsinj_Click);
             // 
-            // but_AA
-            // 
-            this.but_AA.Location = new System.Drawing.Point(467, 501);
-            this.but_AA.Name = "but_AA";
-            this.but_AA.Size = new System.Drawing.Size(75, 23);
-            this.but_AA.TabIndex = 82;
-            this.but_AA.Text = "altitudeangel";
-            this.but_AA.UseVisualStyleBackColor = true;
-            this.but_AA.Click += new System.EventHandler(this.but_AA_Click);
-            // 
             // controlSensorsStatus1
             // 
             this.controlSensorsStatus1.BackColor = System.Drawing.Color.Transparent;
@@ -919,7 +898,6 @@
             this.Controls.Add(this.but_GDAL);
             this.Controls.Add(this.myButton3);
             this.Controls.Add(this.but_followswarm);
-            this.Controls.Add(this.but_AA);
             this.Controls.Add(this.but_gpsinj);
             this.Controls.Add(this.controlSensorsStatus1);
             this.Controls.Add(this.BUT_magfit2);
@@ -967,7 +945,7 @@
         private Controls.MyButton BUT_movingbase;
         private Controls.MyButton but_getfw;
         private Controls.MyButton but_mavserialport;
-        System.Windows.Forms.Button button3;
+        MissionPlanner.Controls.MyButton button3;
         private Controls.MyButton BUT_shptopoly;
         private Controls.MyButton but_gimbaltest;
         private Controls.MyButton but_maplogs;
@@ -1016,7 +994,6 @@
         private Controls.MyButton BUT_magfit2;
         private Controls.ControlSensorsStatus controlSensorsStatus1;
         private Controls.MyButton but_gpsinj;
-        private Controls.MyButton but_AA;
         private Controls.MyButton but_followswarm;
         private Controls.MyButton myButton3;
         private Controls.MyButton but_GDAL;

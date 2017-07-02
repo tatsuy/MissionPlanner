@@ -64,6 +64,12 @@ namespace MissionPlanner
                     Controls.Add(ogl);
 
                     ogl.Dock = DockStyle.Fill;
+
+                    ogl.Click += delegate(object sender, EventArgs args)
+                    {
+                        tableLayoutPanel1.Visible = !tableLayoutPanel1.Visible;
+                        controlSensorsStatus1.Visible = !controlSensorsStatus1.Visible;
+                    };
                 }
                 catch
                 {
@@ -242,11 +248,6 @@ namespace MissionPlanner
         private void BUT_followleader_Click(object sender, EventArgs e)
         {
             new FollowPathControl().Show();
-        }
-
-        private void BUT_driverclean_Click(object sender, EventArgs e)
-        {
-            CleanDrivers.Clean();
         }
 
 
@@ -970,15 +971,15 @@ namespace MissionPlanner
                                 var item = packet.ToStructure<MAVLink.mavlink_gps_inject_data_t>();
                                 st.Write(item.data, 0, item.len);
                             }
+                            else if (packet.msgid == (uint)MAVLink.MAVLINK_MSG_ID.GPS_RTCM_DATA)
+                            {
+                                var item = packet.ToStructure<MAVLink.mavlink_gps_rtcm_data_t>();
+                                st.Write(item.data, 0, item.len);
+                            }
                         }
                     }
                 }
             }
-        }
-
-        private void but_AA_Click(object sender, EventArgs e)
-        {
-            Utilities.AltitudeAngel.AltitudeAngel.service.SignInAsync();
         }
 
         private void but_followswarm_Click(object sender, EventArgs e)

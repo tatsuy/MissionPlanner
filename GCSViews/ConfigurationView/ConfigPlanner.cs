@@ -62,7 +62,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             var cultureCodes = new[]
             {
                 "en-US", "zh-Hans", "zh-TW", "ru-RU", "Fr", "Pl", "it-IT", "es-ES", "de-DE", "ja-JP", "id-ID", "ko-KR",
-                "ar"
+                "ar", "pt"
             };
 
             _languages = cultureCodes
@@ -114,6 +114,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             SetCheckboxFromConfig("showairports", CHK_showairports);
             SetCheckboxFromConfig("enableadsb", chk_ADSB);
             SetCheckboxFromConfig("norcreceiver", chk_norcreceiver);
+            SetCheckboxFromConfig("showtfr", chk_tfr);
 
             // this can't fail because it set at startup
             NUM_tracklength.Value = Settings.Instance.GetInt32("NUM_tracklength");
@@ -752,6 +753,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private void CHK_beta_CheckedChanged(object sender, EventArgs e)
         {
             Settings.Instance["beta_updates"] = CHK_beta.Checked.ToString();
+
+            MissionPlanner.Utilities.Update.dobeta = CHK_beta.Checked;
         }
 
         private void CHK_Password_CheckedChanged(object sender, EventArgs e)
