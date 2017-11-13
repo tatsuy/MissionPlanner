@@ -26,6 +26,8 @@ namespace MissionPlanner.Log
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
+        private static string lastLogDir;
+
         CollectionBuffer logdata;
         Hashtable logdatafilter = new Hashtable();
         Hashtable seenmessagetypes = new Hashtable();
@@ -516,13 +518,13 @@ namespace MissionPlanner.Log
                 {
                     openFileDialog1.Filter = "Log Files|*.log;*.bin";
                     openFileDialog1.FilterIndex = 2;
-                    openFileDialog1.RestoreDirectory = true;
                     openFileDialog1.Multiselect = true;
-
-                    openFileDialog1.InitialDirectory = Settings.Instance.LogDir;
+                    openFileDialog1.InitialDirectory = lastLogDir ?? Settings.Instance.LogDir;
 
                     if (openFileDialog1.ShowDialog() == DialogResult.OK)
                     {
+                        lastLogDir = Path.GetDirectoryName(openFileDialog1.FileName);
+
                         int a = 0;
                         foreach (var fileName in openFileDialog1.FileNames)
                         {
@@ -549,7 +551,10 @@ namespace MissionPlanner.Log
                     }
                     else
                     {
-                        this.Close();
+                        this.BeginInvoke((Action) delegate
+                        {
+                            this.Close();
+                        });
                         return;
                     }
                 }
@@ -558,10 +563,15 @@ namespace MissionPlanner.Log
             {
                 ThreadPool.QueueUserWorkItem(o => LoadLog(logfilename));
             }
+
+            log.Info("LogBrowse_Load Done");
         }
 
         public void LoadLog(string FileName)
         {
+            while (!this.IsHandleCreated)
+                Thread.Sleep(100);
+
             Loading.ShowLoading(Strings.Scanning_File, this);
 
             try
@@ -603,7 +613,7 @@ namespace MissionPlanner.Log
 
                 log.Info("Done " + (GC.GetTotalMemory(false)/1024.0/1024.0));
 
-                this.Invoke((Action) delegate {
+                this.BeginInvoke((Action) delegate {
                     LoadLog2(FileName, logdata, colcount);
                 });
             }
@@ -612,6 +622,8 @@ namespace MissionPlanner.Log
                 CustomMessageBox.Show("Failed to read File: " + ex.ToString());
                 return;
             }
+
+            log.Info("LoadLog Done");
         }
 
         void LoadLog2(String FileName, CollectionBuffer logdata, int colcount)
@@ -642,7 +654,7 @@ namespace MissionPlanner.Log
                     dataGridView1.RowPrePaint += (sender, args) =>
                     {
                         VBar.Maximum = logdata.Count;
-                        populateRowData(rowstartoffset + args.RowIndex, args.RowIndex);
+                        populateRowData(rowstartoffset, args.RowIndex, args.RowIndex);
                     };
 
                     dataGridView1.ColumnCount = colcount;
@@ -652,7 +664,7 @@ namespace MissionPlanner.Log
                         dataGridView1.Rows.Add();
 
                     // populate first row
-                    populateRowData(0, 0);
+                    populateRowData(0, 0, 0);
 
                     VBar.ValueChanged += (sender, args) =>
                     {
@@ -723,24 +735,40 @@ namespace MissionPlanner.Log
             //CMB_preselect.DisplayMember = "Name";
             CMB_preselect.DataSource = null;
             CMB_preselect.DataSource = graphs;
+
+            log.Info("LoadLog2 Done");
         }
 
-        private void populateRowData(int rowIndex, int destDGV = -1)
+        private void populateRowData(int rowstartoffset, int rowIndex, int destDGV = -1)
         {
-            var DGVrow = (destDGV == -1) ? rowIndex : destDGV;
-
-            if (DGVrow > dataGridView1.Rows.Count)
-                return;
+            //Console.WriteLine("populateRowData {0} {1} {2}", rowstartoffset, rowIndex, destDGV);
+            var DGVrow = (destDGV == -1) ? rowstartoffset + rowIndex : destDGV;
 
             var cellcount = dataGridView1.Rows[DGVrow].Cells.Count;
             for (int i = 0; i < cellcount; i++)
             {
-                var data = new DataGridViewCellValueEventArgs(i, rowIndex);
+                if (DGVrow > dataGridView1.Rows.Count)
+                {
+                    dataGridView1.Rows[DGVrow].Cells[i].Value = "";
+                    continue;
+                }
+
+                var data = new DataGridViewCellValueEventArgs(i, rowstartoffset + rowIndex);
 
                 dataGridView1_CellValueNeeded(dataGridView1, data);
 
-                dataGridView1.Rows[DGVrow].Cells[i].Value = data.Value;
+                string existing = dataGridView1.Rows[DGVrow].Cells[i].Value as string;
+                string newvalue = data.Value as string;
+
+                if (existing == newvalue)
+                {
+                    continue;
+                }
+
+                //Console.WriteLine("set data {0} = {1}", dataGridView1.Rows[DGVrow].Cells[i].Value, data.Value);
+                dataGridView1.Rows[DGVrow].Cells[i].Value = String.IsNullOrEmpty(newvalue)  ? "" : newvalue;
             }
+            //Console.WriteLine("populateRowData done {0} {1} {2}", rowstartoffset, rowIndex, destDGV);
         }
 
         private void UntickTreeView()
@@ -1066,6 +1094,7 @@ namespace MissionPlanner.Log
             try
             {
                 zg1.AxisChange();
+                zg1.Invalidate();
             }
             catch
             {
@@ -1186,6 +1215,7 @@ namespace MissionPlanner.Log
 
         void GraphItem_GetList(string fieldname, string type, DFLog dflog, DataModifer dataModifier, bool left)
         {
+            log.Info("GraphItem_GetList " + type + " " + fieldname);
             int col = dflog.FindMessageOffset(type, fieldname);
 
             // field does not exist
@@ -1323,19 +1353,7 @@ namespace MissionPlanner.Log
             // Zoom all
             zg1.ZoomOutAll(zg1.GraphPane);
 
-            try
-            {
-                DrawModes();
-
-                DrawErrors();
-
-                DrawTime();
-
-                DrawMSG();
-            }
-            catch
-            {
-            }
+            zg1_ZoomEvent(zg1, null, null);
 
             // Force a redraw
             zg1.Refresh();
@@ -1427,6 +1445,9 @@ namespace MissionPlanner.Log
 
             var prevx = zg1.GraphPane.XAxis.Scale.Min;
             int prevmodeno = 0;
+            // 2% of total
+            var modeheighty = zg1.GraphPane.YAxis.Scale.Min +
+                              (zg1.GraphPane.YAxis.Scale.Max - zg1.GraphPane.YAxis.Scale.Min) * 0.02;
 
             ModePolyCache.Clear();
             ModeCache.Clear();
@@ -1471,8 +1492,8 @@ namespace MissionPlanner.Log
                         Points = new[]
                         {
                             new PointD(prevx, zg1.GraphPane.YAxis.Scale.Min), // bl
-                            new PointD(prevx, zg1.GraphPane.YAxis.Scale.Max), // tl
-                            new PointD(a, zg1.GraphPane.YAxis.Scale.Max),// tr
+                            new PointD(prevx, modeheighty), // tl
+                            new PointD(a, modeheighty),// tr
                             new PointD(a, zg1.GraphPane.YAxis.Scale.Min), // br
                         },
                         Fill = new Fill(colourspastal[prevmodeno]),
@@ -1506,8 +1527,8 @@ namespace MissionPlanner.Log
                 Points = new[]
                 {
                     new PointD(prevx, zg1.GraphPane.YAxis.Scale.Min), // bl
-                    new PointD(prevx, zg1.GraphPane.YAxis.Scale.Max), // tl
-                    new PointD(zg1.GraphPane.XAxis.Scale.Max, zg1.GraphPane.YAxis.Scale.Max),// tr
+                    new PointD(prevx, modeheighty), // tl
+                    new PointD(zg1.GraphPane.XAxis.Scale.Max, modeheighty),// tr
                     new PointD(zg1.GraphPane.XAxis.Scale.Max, zg1.GraphPane.YAxis.Scale.Min), // br
                 },
                 Fill = new Fill(colourspastal[modenum]),
@@ -2418,6 +2439,8 @@ namespace MissionPlanner.Log
                 {
                 }
             }
+
+            this.Invalidate();
         }
 
         private void treeView1_DrawNode(object sender, DrawTreeNodeEventArgs e)
@@ -2814,6 +2837,22 @@ namespace MissionPlanner.Log
         private void chk_msg_CheckedChanged(object sender, EventArgs e)
         {
             zg1_ZoomEvent(zg1, null, null);
+        }
+
+        private void splitContainer2_Resize(object sender, EventArgs e)
+        {
+            splitContainer2.Visible = false;
+            splitContainer2.Visible = true;
+            splitContainer2.Panel1.Invalidate();
+            splitContainer2.Panel2.Invalidate();
+        }
+
+        private void splitContainer1_Resize(object sender, EventArgs e)
+        {
+            splitContainer1.Visible = false;
+            splitContainer1.Visible = true;
+            splitContainer1.Panel1.Invalidate();
+            splitContainer1.Panel2.Invalidate();
         }
     }
 }

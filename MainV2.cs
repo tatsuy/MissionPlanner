@@ -22,6 +22,9 @@ using MissionPlanner.Warnings;
 using System.Collections.Concurrent;
 using MissionPlanner.GCSViews.ConfigurationView;
 using WebCamService;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 namespace MissionPlanner
 {
@@ -201,7 +204,7 @@ namespace MissionPlanner
 
         Controls.MainSwitcher MyView;
 
-        private static DisplayView _displayConfiguration = new DisplayView().Basic();
+        private static DisplayView _displayConfiguration = new DisplayView().Advanced();
 
         public static event EventHandler LayoutChanged;
 
@@ -280,7 +283,7 @@ namespace MissionPlanner
         /// <summary>
         /// other planes in the area from adsb
         /// </summary>
-        internal object adsblock = new object();
+        public object adsblock = new object();
 
         public ConcurrentDictionary<string,adsb.PointLatLngAltHdg> adsbPlanes = new ConcurrentDictionary<string, adsb.PointLatLngAltHdg>();
 
@@ -306,12 +309,12 @@ namespace MissionPlanner
         /// <summary>
         /// spech engine static class
         /// </summary>
-        public static Speech speechEngine = null;
+        public static Speech speechEngine { get; set; }
 
         /// <summary>
         /// joystick static class
         /// </summary>
-        public static Joystick.Joystick joystick = null;
+        public static Joystick.Joystick joystick { get; set; }
 
         /// <summary>
         /// track last joystick packet sent. used to control rate
@@ -334,7 +337,7 @@ namespace MissionPlanner
         /// <summary>
         /// hud background image grabber from a video stream - not realy that efficent. ie no hardware overlays etc.
         /// </summary>
-        public static WebCamService.Capture cam = null;
+        public static WebCamService.Capture cam { get; set; }
 
         /// <summary>
         /// controls the main serial reader thread
@@ -405,7 +408,7 @@ namespace MissionPlanner
         /// Otiginally seperate controls, each hosted in a toolstip sqaure, combined into this custom
         /// control for layout reasons.
         /// </summary>
-        static internal ConnectionControl _connectionControl;
+        public static ConnectionControl _connectionControl;
 
         public static bool TerminalTheming = true;
 
@@ -580,10 +583,14 @@ namespace MissionPlanner
             string temp2 = Settings.Instance.BaudRate;
             if (!string.IsNullOrEmpty(temp2))
             {
-                _connectionControl.CMB_baudrate.SelectedIndex = _connectionControl.CMB_baudrate.FindString(temp2);
-                if (_connectionControl.CMB_baudrate.SelectedIndex == -1)
+                var idx =  _connectionControl.CMB_baudrate.FindString(temp2);
+                if (idx == -1)
                 {
                     _connectionControl.CMB_baudrate.Text = temp2;
+                }
+                else
+                {
+                    _connectionControl.CMB_baudrate.SelectedIndex = idx;
                 }
 
                 comPortBaud = int.Parse(temp2);
@@ -729,7 +736,7 @@ namespace MissionPlanner
             //set first instance display configuration
             if (DisplayConfiguration == null)
             {
-                DisplayConfiguration = DisplayConfiguration.Basic();
+                DisplayConfiguration = DisplayConfiguration.Advanced();
             }
 
             // load old config
@@ -750,7 +757,7 @@ namespace MissionPlanner
                 }
                 catch
                 {
-                    DisplayConfiguration = DisplayConfiguration.Basic();
+                    DisplayConfiguration = DisplayConfiguration.Advanced();
                 }
             }
 
@@ -1072,6 +1079,30 @@ namespace MissionPlanner
                         new adsb.PointLatLngAltHdg(adsb.Lat, adsb.Lng,
                             adsb.Alt, adsb.Heading, id,
                             DateTime.Now) {CallSign = adsb.CallSign};
+                }
+
+                try
+                {
+                    MAVLink.mavlink_adsb_vehicle_t packet = new MAVLink.mavlink_adsb_vehicle_t();
+
+                    packet.altitude = (int)(MainV2.instance.adsbPlanes[id].Alt * 1000);
+                    packet.altitude_type = (byte)MAVLink.ADSB_ALTITUDE_TYPE.GEOMETRIC;
+                    packet.callsign = ASCIIEncoding.ASCII.GetBytes(adsb.CallSign);
+                    packet.emitter_type = (byte)MAVLink.ADSB_EMITTER_TYPE.NO_INFO;
+                    packet.heading = (ushort)(MainV2.instance.adsbPlanes[id].Heading * 100);
+                    packet.lat = (int)(MainV2.instance.adsbPlanes[id].Lat * 1e7);
+                    packet.lon = (int)(MainV2.instance.adsbPlanes[id].Lng * 1e7);
+                    packet.ICAO_address = uint.Parse(id, NumberStyles.HexNumber);
+
+                    packet.flags = (ushort)(MAVLink.ADSB_FLAGS.VALID_ALTITUDE | MAVLink.ADSB_FLAGS.VALID_COORDS |
+                        MAVLink.ADSB_FLAGS.VALID_HEADING | MAVLink.ADSB_FLAGS.VALID_CALLSIGN);
+
+                    //send to current connected
+                    MainV2.comPort.sendPacket(packet, MainV2.comPort.MAV.sysid, MainV2.comPort.MAV.compid);
+                }
+                catch
+                {
+
                 }
             }
         }
@@ -2604,7 +2635,7 @@ namespace MissionPlanner
                         {
                             try
                             {
-                                port.readPacket();
+                               port.readPacket();
                             }
                             catch (Exception ex)
                             {
@@ -2800,7 +2831,7 @@ namespace MissionPlanner
             }
             catch (TypeInitializationException) // windows xp lacking patch level
             {
-                CustomMessageBox.Show("Please update your .net version. kb2468871");
+                //CustomMessageBox.Show("Please update your .net version. kb2468871");
             }
             catch (Exception ex)
             {
@@ -2906,7 +2937,7 @@ namespace MissionPlanner
                 {
                     try
                     {
-                        MainV2.cam = new Capture(int.Parse(cmds["cam"]), null);
+                        MainV2.cam = new WebCamService.Capture(int.Parse(cmds["cam"]), null);
 
                         MainV2.cam.Start();
                     }
@@ -3194,6 +3225,8 @@ namespace MissionPlanner
             }
             if (keyData == (Keys.Control | Keys.W)) // test ac config
             {
+                new Swarm.SRB.Control().Show();
+
                 return true;
             }
             if (keyData == (Keys.Control | Keys.Z))
@@ -3253,8 +3286,18 @@ namespace MissionPlanner
                 }*/
                 return true;
             }
+
+            if (ProcessCmdKeyCallback != null)
+            {
+                return ProcessCmdKeyCallback(ref msg, keyData);
+            }
+
             return base.ProcessCmdKey(ref msg, keyData);
         }
+
+        public delegate bool ProcessCmdKeyHandler(ref Message msg, Keys keyData);
+
+        public event ProcessCmdKeyHandler ProcessCmdKeyCallback;
 
         public void changelanguage(CultureInfo ci)
         {
@@ -3672,6 +3715,85 @@ namespace MissionPlanner
         private void connectionOptionsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             new ConnectionOptions().Show(this);
+        }
+
+        private void MenuArduPilot_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start("http://ardupilot.org/?utm_source=Menu&utm_campaign=MP");
+            }
+            catch
+            {
+                CustomMessageBox.Show("Failed to open url http://ardupilot.org");
+            }
+        }
+
+        private void connectionListToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+            openFileDialog.ShowDialog();
+
+            if (File.Exists(openFileDialog.FileName))
+            {
+                var lines = File.ReadAllLines(openFileDialog.FileName);
+
+                Regex tcp = new Regex("tcp://(.*):([0-9]+)");
+                Regex udp = new Regex("udp://(.*):([0-9]+)");
+                Regex udpcl = new Regex("udpcl://(.*):([0-9]+)");
+                Regex serial = new Regex("serial:(.*):([0-9]+)");
+
+                //Parallel.ForEach(lines, line =>
+                foreach (var line in lines)
+                {
+                    try
+                    {
+                        MAVLinkInterface mav = new MAVLinkInterface();
+
+                        if (tcp.IsMatch(line))
+                        {
+                            var matches = tcp.Match(line);
+                            var tc = new TcpSerial();
+                            tc.client = new TcpClient(matches.Groups[1].Value, int.Parse(matches.Groups[2].Value));
+                            mav.BaseStream = tc;
+                        }
+                        else if (udp.IsMatch(line))
+                        {
+                            var matches = udp.Match(line);
+                            var uc = new UdpSerial();
+                            uc.client = new UdpClient(int.Parse(matches.Groups[2].Value));
+                            mav.BaseStream = uc;
+                        }
+                        else if (udpcl.IsMatch(line))
+                        {
+                            var matches = udpcl.Match(line);
+                            var udc = new UdpSerialConnect();
+                            udc.client = new UdpClient(matches.Groups[1].Value, int.Parse(matches.Groups[2].Value));
+                            mav.BaseStream = udc;
+                        }
+                        else if (serial.IsMatch(line))
+                        {
+                            var matches = serial.Match(line);
+                            var port = new Comms.SerialPort();
+                            port.PortName = matches.Groups[1].Value;
+                            port.BaudRate = int.Parse(matches.Groups[2].Value);
+                            mav.BaseStream = port;
+                            mav.BaseStream.Open();
+                        }
+                        else
+                        {
+                            continue;
+                        }
+
+                        doConnect(mav, "preset", "0");
+                        Comports.Add(mav);
+                    }
+                    catch
+                    {
+                    }
+                }
+                //);
+            }
         }
     }
 }

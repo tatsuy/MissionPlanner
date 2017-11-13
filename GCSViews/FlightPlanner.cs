@@ -523,6 +523,24 @@ namespace MissionPlanner.GCSViews
                 return true;
             }
 
+            if (keyData == (Keys.Control | Keys.M))
+            {
+                // get the command list from the datagrid
+                var commandlist = GetCommandList();
+                MainV2.comPort.MAV.wps[0] = new Locationwp().Set(MainV2.comPort.MAV.cs.HomeLocation.Lat,
+                    MainV2.comPort.MAV.cs.HomeLocation.Lng, MainV2.comPort.MAV.cs.HomeLocation.Alt, 0);
+                int a = 1;
+                commandlist.ForEach(i =>
+                {
+                    MAVLink.mavlink_mission_item_t item = (MAVLink.mavlink_mission_item_t) i;
+                    item.seq = (ushort)a;
+                    MainV2.comPort.MAV.wps[a] = item;
+                    a++;
+                });
+
+                return true;
+            }
+
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
@@ -1324,6 +1342,7 @@ namespace MissionPlanner.GCSViews
                             command != (ushort)MAVLink.MAV_CMD.VTOL_TAKEOFF && // doesnt have a position
                             command != (ushort) MAVLink.MAV_CMD.RETURN_TO_LAUNCH &&
                             command != (ushort) MAVLink.MAV_CMD.CONTINUE_AND_CHANGE_ALT &&
+                            command != (ushort)MAVLink.MAV_CMD.DELAY &&
                             command != (ushort) MAVLink.MAV_CMD.GUIDED_ENABLE
                             || command == (ushort) MAVLink.MAV_CMD.DO_SET_ROI)
                         {
@@ -1917,7 +1936,7 @@ namespace MissionPlanner.GCSViews
                 }
             }
 
-            ProgressReporterDialogue frmProgressReporter = new ProgressReporterDialogue
+            IProgressReporterDialogue frmProgressReporter = new ProgressReporterDialogue
             {
                 StartPosition = FormStartPosition.CenterScreen,
                 Text = "Receiving WP's"
@@ -2899,6 +2918,7 @@ namespace MissionPlanner.GCSViews
                     if (line.StartsWith("#"))
                         continue;
 
+                    //seq/cur/frame/mode
                     string[] items = line.Split(new[] {'\t', ' ', ','}, StringSplitOptions.RemoveEmptyEntries);
 
                     if (items.Length <= 9)
@@ -2906,6 +2926,13 @@ namespace MissionPlanner.GCSViews
 
                     try
                     {
+                        // check to see if the first wp is index 0/home.
+                        // if it is not index 0, add a blank home point
+                        if (wp_count == 0 && items[0] != "0")
+                        {
+                            cmds.Add(new Locationwp());
+                        }
+
                         Locationwp temp = new Locationwp();
                         if (items[2] == "3")
                         {
@@ -6024,6 +6051,11 @@ namespace MissionPlanner.GCSViews
                 if (Math.Abs(deltax)/100 < 40)
                     gridsize = 100;
 
+                if (Math.Abs(deltax) / 10 < 40)
+                    gridsize = 10;
+
+                if (Math.Abs(deltax) / 1 < 40)
+                    gridsize = 1;
 
                 // round it - x
                 utm1[0] = utm1[0] - (utm1[0]%gridsize);

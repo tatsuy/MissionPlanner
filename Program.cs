@@ -148,6 +148,7 @@ namespace MissionPlanner
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Custom.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Earthbuilder.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Statkart_Topo2.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Eniro_Topo.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapBox.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapboxNoFly.Instance);
             // optionally add gdal support
@@ -182,9 +183,9 @@ namespace MissionPlanner
             Device.DeviceStructure test2 = new Device.DeviceStructure(262434);
             Device.DeviceStructure test3 = new Device.DeviceStructure(131874);
 
-            //ph2
-            Device.DeviceStructure test5 = new Device.DeviceStructure(131874);
-            Device.DeviceStructure test6 = new Device.DeviceStructure(263178);
+            //ph2 - cube with here
+            Device.DeviceStructure test5 = new Device.DeviceStructure(466441);
+            Device.DeviceStructure test6 = new Device.DeviceStructure(131874);
             Device.DeviceStructure test7 = new Device.DeviceStructure(263178);
             // 
             Device.DeviceStructure test8 = new Device.DeviceStructure(1442082);
@@ -324,6 +325,10 @@ namespace MissionPlanner
 
         static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            var list = AppDomain.CurrentDomain.ReflectionOnlyGetAssemblies();
+
+            log.Error(list);
+
             handleException((Exception) e.ExceptionObject);
         }
 

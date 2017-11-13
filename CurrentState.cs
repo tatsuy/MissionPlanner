@@ -9,7 +9,9 @@ using MissionPlanner.Attributes;
 using MissionPlanner;
 using System.Collections;
 using System.Linq;
+using System.Runtime.Serialization;
 using DirectShowLib;
+using Newtonsoft.Json;
 
 namespace MissionPlanner
 {
@@ -19,9 +21,11 @@ namespace MissionPlanner
 
         public event EventHandler csCallBack;
 
-        internal MAVState parent;
+        [JsonIgnore]
+        [IgnoreDataMember]
+        public MAVState parent;
 
-        internal int lastautowp = -1;
+        public int lastautowp = -1;
 
         // multipliers
         public static float multiplierdist = 1;
@@ -682,7 +686,7 @@ namespace MissionPlanner
             set
             {
                 if (_battery_voltage == 0) _battery_voltage = value;
-                _battery_voltage = value*0.2f + _battery_voltage*0.8f;
+                _battery_voltage = value*0.4f + _battery_voltage*0.6f;
             }
         }
 
@@ -747,6 +751,8 @@ namespace MissionPlanner
 
         public double battery_temp { get; set; }
 
+        public double battery_usedmah2 { get; set; }
+
         [DisplayText("Bat2 Voltage (V)")]
         public double battery_voltage2
         {
@@ -754,11 +760,13 @@ namespace MissionPlanner
             set
             {
                 if (_battery_voltage2 == 0) _battery_voltage2 = value;
-                _battery_voltage2 = value*0.2f + _battery_voltage2*0.8f;
+                _battery_voltage2 = value*0.4f + _battery_voltage2*0.6f;
             }
         }
 
         internal double _battery_voltage2;
+
+        private DateTime _lastcurrent2 = DateTime.MinValue;
 
         [DisplayText("Bat2 Current (Amps)")]
         public double current2
@@ -766,8 +774,10 @@ namespace MissionPlanner
             get { return _current2; }
             set
             {
-                if (value < 0) return;
+                if (value < 0) return;              
+                battery_usedmah2 += ((value * 1000.0) * (datetime - _lastcurrent2).TotalHours);
                 _current2 = value;
+                _lastcurrent2 = datetime;
             }
         }
 
@@ -787,7 +797,18 @@ namespace MissionPlanner
             set { _homelocation = value; }
         }
 
-        public PointLatLngAlt MovingBase = null;
+        PointLatLngAlt _movingbase = new PointLatLngAlt();
+
+        public PointLatLngAlt MovingBase
+        {
+            get { return _movingbase; }
+            set
+            {
+                if (_movingbase.Lat != value.Lat || _movingbase.Lng != value.Lng || _movingbase.Alt
+                    != value.Alt)
+                    _movingbase = value;
+            }
+        }
 
         static PointLatLngAlt _trackerloc = new PointLatLngAlt();
 
@@ -2301,11 +2322,13 @@ namespace MissionPlanner
                         var deltaimu = timesec - imutime;
 
                         //Console.WriteLine( + " " + deltawall + " " + deltaimu + " " + System.Threading.Thread.CurrentThread.Name);
-                        if (speedup > 0)
-                            speedup = (float) (speedup*0.95 + (deltaimu/deltawall)*0.05);
+                        if (deltaimu > 0 && deltaimu < 10)
+                        {
+                            speedup = (float) (speedup * 0.95 + (deltaimu / deltawall) * 0.05);
 
-                        imutime = timesec;
-                        lastimutime = DateTime.Now;
+                            imutime = timesec;
+                            lastimutime = DateTime.Now;
+                        }
 
                         //MAVLink.packets[(byte)MAVLink.MSG_NAMES.RAW_IMU);
                     }

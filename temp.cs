@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
 using System.IO.Ports;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
@@ -61,7 +63,7 @@ namespace MissionPlanner
                 {
                     var ogl = new OpenGLtest2();
 
-                    Controls.Add(ogl);
+                    //Controls.Add(ogl);
 
                     ogl.Dock = DockStyle.Fill;
 
@@ -322,6 +324,9 @@ namespace MissionPlanner
                     if (software.urlpx4v4 != "")
                         xmlwriter.WriteElementString("urlpx4v4",
                             new Uri(software.urlpx4v4).LocalPath.TrimStart('/', '\\'));
+                    if (software.urlpx4v4pro != "")
+                        xmlwriter.WriteElementString("urlpx4v4pro",
+                            new Uri(software.urlpx4v4pro).LocalPath.TrimStart('/', '\\'));
                     if (software.urlvrbrainv40 != "")
                         xmlwriter.WriteElementString("urlvrbrainv40",
                             new Uri(software.urlvrbrainv40).LocalPath.TrimStart('/', '\\'));
@@ -381,6 +386,10 @@ namespace MissionPlanner
                     if (software.urlpx4v4 != "")
                     {
                         Common.getFilefromNet(software.urlpx4v4, basedir + new Uri(software.urlpx4v4).LocalPath);
+                    }
+                    if (software.urlpx4v4pro != "")
+                    {
+                        Common.getFilefromNet(software.urlpx4v4pro, basedir + new Uri(software.urlpx4v4pro).LocalPath);
                     }
 
                     if (software.urlvrbrainv40 != "")
@@ -1041,6 +1050,65 @@ namespace MissionPlanner
         {
             LogDownloadscp form = new LogDownloadscp();
             form.Show();
+        }
+
+        private void but_td_Click(object sender, EventArgs e)
+        {
+            if (MainV2.instance.FlightPlanner.drawnpolygon.Points.Count == 0)
+            {
+                CustomMessageBox.Show("Please draw a polygon for the fence in flightplanner");
+                return;
+            }
+
+            Swarm.TD.Controller ctl = new Swarm.TD.Controller();
+
+            var fencepolygon = new List<PointLatLng>(MainV2.instance.FlightPlanner.drawnpolygon.Points);
+
+            fencepolygon.ForEach(a => { ctl.DG.Fence.Add((PointLatLngAlt) a); });
+
+            double minalt = 2;
+            double maxalt = 30;
+
+            InputBox.Show("", "Fence Min Alt", ref minalt);
+            InputBox.Show("", "Fence Max Alt", ref maxalt);
+
+            ctl.DG.FenceMinAlt = minalt;
+            ctl.DG.FenceMaxAlt = maxalt;
+
+            ctl.Start();
+        }
+
+        private void but_dem_Click(object sender, EventArgs e)
+        {
+            UserControl ctl = new UserControl() {Width = 1100, AutoSize = true};
+
+            string line = "";
+
+            foreach (var item in GeoTiff.index)
+            {
+                //log.InfoFormat("Start Point ({0},{1},{2}) --> ({3},{4},{5})", item.i, item.j, item.k, item.x, item.y, item.z);
+
+                line += String.Format("{0} = {1} = {2}*{3} {4}\n", item.FileName, item.Area, item.width, item.height, item.bits,
+                    item.xscale, item.yscale, item.zscale);
+            }
+
+            ctl.Controls.Add(new Label() {Text = line, AutoSize = true, Location = new Point(0, 30)});
+            var butt = new MyButton() {Text = "Open DEM Dir"};
+            butt.Click += (a, ev) =>
+            {
+                System.Diagnostics.Process.Start(@"C:\ProgramData\Mission Planner\srtm\");
+            };
+            ctl.Controls.Add(butt);
+
+            ctl.ShowUserControl();
+        }
+
+        private void but_gsttest_Click(object sender, EventArgs e)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem((a) =>
+            {
+                GStreamer.test();
+            });
         }
     }
 }
