@@ -1,12 +1,12 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard20</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0</TargetFrameworks>
     <ApplicationIcon />
     <OutputTypeEx>library</OutputTypeEx>
     <StartupObject />
     <AllowUnsafeBlocks>True</AllowUnsafeBlocks>
-    <DebugType>embedded</DebugType>
+    <DebugType>full</DebugType>
     <DebugSymbols>True</DebugSymbols>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <Authors>Michael Oborne</Authors>
@@ -22,12 +22,6 @@
 
   <ItemGroup>
     <PackageReference Include="log4net" Version="2.0.8" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="System.Web.Extensions">
-      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.6.1\System.Web.Extensions.dll</HintPath>
-    </Reference>
   </ItemGroup>
 
 

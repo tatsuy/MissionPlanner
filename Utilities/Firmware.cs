@@ -2,6 +2,7 @@
 using ManagedNativeWifi.Simple;
 using MissionPlanner.Arduino;
 using MissionPlanner.Comms;
+using Newtonsoft.Json;
 using px4uploader;
 using SharpAdbClient;
 using solo;
@@ -13,6 +14,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
 using System.Xml.Serialization;
@@ -25,6 +27,8 @@ namespace MissionPlanner.Utilities
 
         public event ProgressEventHandler Progress;
 
+        //http://firmware.ardupilot.org/manifest.json
+
         string firmwareurl = "https://raw.github.com/diydrones/binary/master/Firmware/firmware2.xml";
 
         readonly string gholdurl = ("https://github.com/diydrones/binary/raw/!Hash!/Firmware/firmware2.xml");
@@ -34,35 +38,82 @@ namespace MissionPlanner.Utilities
 
         public List<KeyValuePair<string, string>> niceNames = new List<KeyValuePair<string, string>>();
 
-        int ingetapmversion = 0;
-
-        List<software> softwares = new List<software>();
+        private optionsObject options = new optionsObject();
 
         [Serializable]
-        [XmlType(TypeName = "software")]
-        public struct software
+        [XmlType(TypeName = "options")]
+        public class optionsObject
         {
-            public string url;
-            public string url2560;
-            public string url2560_2;
-            public string urlpx4v1;
-            public string urlpx4v2;
-            public string urlpx4v3;
-            public string urlpx4v4;
-            public string urlpx4v4pro;
-            public string urlvrbrainv40;
-            public string urlvrbrainv45;
-            public string urlvrbrainv50;
-            public string urlvrbrainv51;
-            public string urlvrbrainv52;
-            public string urlvrcorev10;
-            public string urlvrubrainv51;
-            public string urlvrubrainv52;
-            public string urlbebop2;
-            public string urldisco;
-            public string name;
-            public string desc;
+            [XmlElement(ElementName = "Firmware")]
+            public List<software> softwares = new List<software>();
+        }
+
+        [Serializable]
+        [XmlType(TypeName = "Firmware")]
+        public class software
+        {
+            public string url = "";
+            public string url2560 = "";
+            [XmlElement(ElementName = "url2560-2")]
+            public string url2560_2 = "";
+            public string urlpx4v1 = "";
+            public string urlpx4v2 = "";
+            public string urlpx4v3 = "";
+            public string urlpx4v4 = "";
+            public string urlpx4v4pro = "";
+            public string urlvrbrainv40 = "";
+            public string urlvrbrainv45 = "";
+            public string urlvrbrainv50 = "";
+            public string urlvrbrainv51 = "";
+            public string urlvrbrainv52 = "";
+            public string urlvrbrainv54 = "";
+            public string urlvrcorev10 = "";
+            public string urlvrubrainv51 = "";
+            public string urlvrubrainv52 = "";
+            public string urlbebop2 = "";
+            public string urldisco = "";
+            
+            // chibios - libraries\AP_HAL_ChibiOS\hwdef
+            public string urlfmuv2 = "";
+            public string urlfmuv3 = "";
+            public string urlfmuv4 = "";
+            public string urlrevomini = "";
+            public string urlmindpxv2 = "";
+
+            public string name = "";
+            public string desc = "";
             public int k_format_version;
+        }
+
+        public class FirmwareInfo
+        {
+            [JsonProperty("mav-type")]
+            public string mav_type { get; set; }
+            [JsonProperty("mav-firmware-version-minor")]
+            public string mav_firmware_version_minor { get; set; }
+            public string format { get; set; }
+            public string url { get; set; }
+            [JsonProperty("mav-firmware-version-type")]
+            public string mav_firmware_version_type { get; set; }
+            [JsonProperty("mav-firmware-version-patch")]
+            public string mav_firmware_version_patch { get; set; }
+            [JsonProperty("mav-autopilot")]
+            public string mav_autopilot { get; set; }
+            public string platform { get; set; }
+            [JsonProperty("mav-firmware-version")]
+            public string mav_firmware_version { get; set; }
+            [JsonProperty("git-sha")]
+            public string git_sha { get; set; }
+            [JsonProperty("mav-firmware-version-major")]
+            public string mav_firmware_version_major { get; set; }
+            public int latest { get; set; }
+        }
+
+        public class RootObject
+        {
+            public List<FirmwareInfo> firmware { get; set; }
+            [JsonProperty("format-version")]
+            public string format_version { get; set; }
         }
 
         public string getUrl(string hash, string filename)
@@ -97,7 +148,7 @@ namespace MissionPlanner.Utilities
         /// </summary>
         public Firmware()
         {
-            string file = Path.GetDirectoryName(Application.ExecutablePath) + Path.DirectorySeparatorChar +
+            string file = Path.GetDirectoryName(Path.GetFullPath(Assembly.GetExecutingAssembly().Location)) + Path.DirectorySeparatorChar +
                           "FirmwareHistory.txt";
 
             if (!File.Exists(file))
@@ -136,6 +187,8 @@ namespace MissionPlanner.Utilities
                 }
             }
 
+            //firmwares = JsonConvert.DeserializeObject<RootObject>(new WebClient().DownloadString("http://firmware.ardupilot.org/manifest.json"));
+
             System.Threading.Thread.CurrentThread.CurrentUICulture = L10N.ConfigLang;
         }
 
@@ -149,33 +202,9 @@ namespace MissionPlanner.Utilities
                 firmwareurl = this.firmwareurl;
 
             // mirror support
-            L10N.ReplaceMirrorUrl(ref firmwareurl);
-
             log.Info("getFWList");
 
-            string url = "";
-            string url2560 = "";
-            string url2560_2 = "";
-            string px4 = "";
-            string px4v2 = "";
-            string px4v3 = "";
-            string px4v4 = "";
-            string px4v4pro = "";
-            string vrbrainv40 = "";
-            string vrbrainv45 = "";
-            string vrbrainv50 = "";
-            string vrbrainv51 = "";
-            string vrbrainv52 = "";
-            string vrcorev10 = "";
-            string vrubrainv51 = "";
-            string vrubrainv52 = "";
-            string bebop2 = "";
-            string disco = "";
-            string name = "";
-            string desc = "";
-            int k_format_version = 0;
-
-            softwares.Clear();
+            options.softwares.Clear();
 
             software temp = new software();
 
@@ -189,159 +218,24 @@ namespace MissionPlanner.Utilities
 
             try
             {
+                XmlSerializer xms = new XmlSerializer(typeof(optionsObject), new Type[] { typeof(software) });
+
                 log.Info("url: " + firmwareurl);
                 using (XmlTextReader xmlreader = new XmlTextReader(firmwareurl))
                 {
-                    while (xmlreader.Read())
-                    {
-                        xmlreader.MoveToElement();
-                        switch (xmlreader.Name)
-                        {
-                            case "url":
-                                url = xmlreader.ReadString();
-                                break;
-                            case "url2560":
-                                url2560 = xmlreader.ReadString();
-                                break;
-                            case "url2560-2":
-                                url2560_2 = xmlreader.ReadString();
-                                break;
-                            case "urlpx4":
-                                px4 = xmlreader.ReadString();
-                                break;
-                            case "urlpx4v2":
-                                px4v2 = xmlreader.ReadString();
-                                break;
-                            case "urlpx4v3":
-                                px4v3 = xmlreader.ReadString();
-                                break;
-                            case "urlpx4v4":
-                                px4v4 = xmlreader.ReadString();
-                                break;
-                            case "urlpx4v4pro":
-                                px4v4pro = xmlreader.ReadString();
-                                break;								
-                            case "urlvrbrainv40":
-                                vrbrainv40 = xmlreader.ReadString();
-                                break;
-                            case "urlvrbrainv45":
-                                vrbrainv45 = xmlreader.ReadString();
-                                break;
-                            case "urlvrbrainv50":
-                                vrbrainv50 = xmlreader.ReadString();
-                                break;
-                            case "urlvrbrainv51":
-                                vrbrainv51 = xmlreader.ReadString();
-                                break;
-                            case "urlvrbrainv52":
-                                vrbrainv52 = xmlreader.ReadString();
-                                break;
-                            case "urlvrcorev10":
-                                vrcorev10 = xmlreader.ReadString();
-                                break;
-                            case "urlvrubrainv51":
-                                vrubrainv51 = xmlreader.ReadString();
-                                break;
-                            case "urlvrubrainv52":
-                                vrubrainv52 = xmlreader.ReadString();
-                                break;
-                            case "urlbebop2":
-                                bebop2 = xmlreader.ReadString();
-                                break;
-                            case "urldisco":
-                                disco = xmlreader.ReadString();
-                                break;
-                            case "name":
-                                name = xmlreader.ReadString();
-                                break;
-                            case "format_version":
-                                k_format_version = int.Parse(xmlreader.ReadString());
-                                break;
-                            case "desc":
-                                desc = xmlreader.ReadString();
-                                break;
-                            case "Firmware":
-                                if (!name.Equals("") && !desc.Equals("Please Update"))
-                                {
-                                    temp.desc = desc.Trim();
-                                    temp.name = name;
-                                    temp.url = url;
-                                    temp.url2560 = url2560;
-                                    temp.url2560_2 = url2560_2;
-                                    temp.urlpx4v1 = px4;
-                                    temp.urlpx4v2 = px4v2;
-                                    temp.urlpx4v3 = px4v3;
-                                    temp.urlpx4v4 = px4v4;
-                                    temp.urlpx4v4pro = px4v4pro;
-                                    temp.urlvrbrainv40 = vrbrainv40;
-                                    temp.urlvrbrainv45 = vrbrainv45;
-                                    temp.urlvrbrainv50 = vrbrainv50;
-                                    temp.urlvrbrainv51 = vrbrainv51;
-                                    temp.urlvrbrainv52 = vrbrainv52;
-                                    temp.urlvrcorev10 = vrcorev10;
-                                    temp.urlvrubrainv51 = vrubrainv51;
-                                    temp.urlvrubrainv52 = vrubrainv52;
-                                    temp.urlbebop2 = bebop2;
-                                    temp.urldisco = disco;
-                                    temp.k_format_version = k_format_version;
-
-                                    try
-                                    {
-                                        try
-                                        {
-                                            if (!url2560.Contains("github"))
-                                            {
-                                                //name = 
-
-                                                lock (this)
-                                                {
-                                                    ingetapmversion++;
-                                                }
-
-                                                System.Threading.ThreadPool.QueueUserWorkItem(getAPMVersion, temp);
-
-                                                //if (name != "")
-                                                //temp.name = name;
-                                            }
-                                        }
-                                        catch
-                                        {
-                                        }
-                                    }
-                                    catch
-                                    {
-                                    } // just in case
-
-                                    softwares.Add(temp);
-                                }
-                                url = "";
-                                url2560 = "";
-                                url2560_2 = "";
-                                px4 = "";
-                                px4v2 = "";
-                                px4v3 = "";
-                                px4v4 = "";
-                                px4v4pro = "";
-                                vrbrainv40 = "";
-                                vrbrainv45 = "";
-                                vrbrainv50 = "";
-                                vrbrainv51 = "";
-                                vrbrainv52 = "";
-                                vrcorev10 = "";
-                                vrubrainv51 = "";
-                                vrubrainv52 = "";
-                                bebop2 = "";
-                                disco = "";
-                                name = "";
-                                desc = "";
-                                k_format_version = 0;
-                                temp = new software();
-                                break;
-                            default:
-                                break;
-                        }
-                    }
+                    options = (optionsObject)xms.Deserialize(xmlreader);
                 }
+
+                Parallel.ForEach(options.softwares, software =>
+                {
+                    try
+                    {
+                        getAPMVersion(software);
+                    }
+                    catch
+                    {
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -350,20 +244,17 @@ namespace MissionPlanner.Utilities
                 throw;
             }
 
-            while (ingetapmversion > 0)
-                System.Threading.Thread.Sleep(100);
-
             log.Info("load done");
 
             updateProgress(-1, Strings.ReceivedList);
 
-            return softwares;
+            return options.softwares;
         }
 
-        public static void SaveSoftwares(List<software> list)
+        public static void SaveSoftwares(optionsObject list)
         {
             System.Xml.Serialization.XmlSerializer writer =
-                new System.Xml.Serialization.XmlSerializer(typeof (List<software>), new Type[] {typeof (software)});
+                new System.Xml.Serialization.XmlSerializer(typeof (optionsObject), new Type[] {typeof (software)});
 
             using (
                 StreamWriter sw =
@@ -378,13 +269,13 @@ namespace MissionPlanner.Utilities
             try
             {
                 System.Xml.Serialization.XmlSerializer reader =
-                    new System.Xml.Serialization.XmlSerializer(typeof (List<software>), new Type[] {typeof (software)});
+                    new System.Xml.Serialization.XmlSerializer(typeof (optionsObject), new Type[] {typeof (software)});
 
                 using (
                     StreamReader sr =
                         new StreamReader(Settings.GetUserDataDirectory() + "fwversions.xml"))
                 {
-                    return (List<software>) reader.Deserialize(sr);
+                    return ((optionsObject) reader.Deserialize(sr)).softwares;
                 }
             }
             catch (Exception ex)
@@ -418,8 +309,6 @@ namespace MissionPlanner.Utilities
 
                 if (baseurl == "" || !baseurl.ToLower().StartsWith("http")) return;
 
-                L10N.ReplaceMirrorUrl(ref baseurl);
-
                 Uri url = new Uri(new Uri(baseurl), "git-version.txt");
 
                 log.Info("Get url " + url.ToString());
@@ -428,30 +317,30 @@ namespace MissionPlanner.Utilities
 
                 WebRequest wr = WebRequest.Create(url);
                 wr.Timeout = 10000;
-                WebResponse wresp = wr.GetResponse();
-
-                StreamReader sr = new StreamReader(wresp.GetResponseStream());
-
-                while (!sr.EndOfStream)
+                using (WebResponse wresp = wr.GetResponse())
+                using (StreamReader sr = new StreamReader(wresp.GetResponseStream()))
                 {
-                    string line = sr.ReadLine();
-
-                    if (line.Contains("APMVERSION:"))
+                    while (!sr.EndOfStream)
                     {
-                        log.Info(line);
+                        string line = sr.ReadLine();
 
-                        // get index
-                        var index = softwares.IndexOf(temp);
-                        // get item to modify
-                        var item = softwares[index];
-                        // move existing name
-                        item.desc = item.name;
-                        // change name
-                        item.name = line.Substring(line.IndexOf(':') + 2);
-                        // save back to list
-                        softwares[index] = item;
+                        if (line.Contains("APMVERSION:"))
+                        {
+                            log.Info(line);
 
-                        return;
+                            // get index
+                            var index = options.softwares.IndexOf(temp);
+                            // get item to modify
+                            var item = options.softwares[index];
+                            // move existing name
+                            item.desc = item.name;
+                            // change name
+                            item.name = line.Substring(line.IndexOf(':') + 2);
+                            // save back to list
+                            options.softwares[index] = item;
+
+                            return;
+                        }
                     }
                 }
 
@@ -460,13 +349,6 @@ namespace MissionPlanner.Utilities
             catch (Exception ex)
             {
                 log.Error(ex);
-            }
-            finally
-            {
-                lock (this)
-                {
-                    ingetapmversion--;
-                }
             }
         }
 
@@ -515,18 +397,22 @@ namespace MissionPlanner.Utilities
                 else if (board == BoardDetect.boards.px4v2)
                 {
                     baseurl = temp.urlpx4v2.ToString();
+                    baseurl = CheckChibiOS(baseurl, temp.urlfmuv2);
                 }
                 else if (board == BoardDetect.boards.px4v3)
                 {
                     baseurl = temp.urlpx4v3.ToString();
-                    if (String.IsNullOrEmpty(baseurl) || !Common.CheckHTTPFileExists(baseurl))
+                    if (String.IsNullOrEmpty(baseurl) || !Download.CheckHTTPFileExists(baseurl))
                     {
                         baseurl = temp.urlpx4v2.ToString();
                     }
+
+                    baseurl = CheckChibiOS(baseurl, temp.urlfmuv3);
                 }
                 else if (board == BoardDetect.boards.px4v4)
                 {
                     baseurl = temp.urlpx4v4.ToString();
+                    baseurl = CheckChibiOS(baseurl, temp.urlfmuv4);
                 }
                 else if (board == BoardDetect.boards.px4v4pro)
                 {
@@ -552,6 +438,10 @@ namespace MissionPlanner.Utilities
                 {
                     baseurl = temp.urlvrbrainv52.ToString();
                 }
+                else if (board == BoardDetect.boards.vrbrainv54)
+                {
+                    baseurl = temp.urlvrbrainv54.ToString();
+                }
                 else if (board == BoardDetect.boards.vrcorev10)
                 {
                     baseurl = temp.urlvrcorev10.ToString();
@@ -572,6 +462,14 @@ namespace MissionPlanner.Utilities
                 {
                     baseurl = temp.urldisco.ToString();
                 }
+                else if (board == BoardDetect.boards.revomini)
+                {
+                    baseurl = temp.urlrevomini.ToString();
+                }
+                else if (board == BoardDetect.boards.mindpxv2)
+                {
+                    baseurl = temp.urlmindpxv2.ToString();
+                }
                 else
                 {
                     CustomMessageBox.Show(Strings.InvalidBoardType);
@@ -587,8 +485,6 @@ namespace MissionPlanner.Utilities
                     baseurl = getUrl(historyhash, baseurl);
 
                 // update to use mirror url
-                L10N.ReplaceMirrorUrl(ref baseurl);
-
                 log.Info("Using " + baseurl);
 
                 var starttime = DateTime.Now;
@@ -673,6 +569,21 @@ namespace MissionPlanner.Utilities
             Tracking.AddTiming("Firmware Upload", board.ToString(), uploadtime, temp.name);
 
             return ans;
+        }
+
+        private string CheckChibiOS(string existingfw, string chibiosurl)
+        {
+            if (String.IsNullOrEmpty(chibiosurl) || !Download.CheckHTTPFileExists(chibiosurl))
+            {
+                return existingfw;
+            }
+
+            if (CustomMessageBox.Show("Upload ChibiOS", "ChibiOS", MessageBoxButtons.YesNo) == (int)DialogResult.Yes)
+            {
+                return chibiosurl;
+            }
+
+            return existingfw;
         }
 
         /// <summary>
@@ -999,11 +910,11 @@ namespace MissionPlanner.Utilities
             PingReply pingReply = pingParrotVehicle(ping);
 
             updateProgress(0, "Trying to connect to " + vehicleName);
-
+            
             if (pingReply == null || pingReply.Status != IPStatus.Success)
             {
                 bool ssidFound = isParrotWifiConnected(vehicleName);
-
+                
                 if (!ssidFound)
                 {
                     CustomMessageBox.Show("Please connect to " + vehicleName + " Wifi now and after that press OK", vehicleName, MessageBoxButtons.OK);
@@ -1015,12 +926,12 @@ namespace MissionPlanner.Utilities
                 {
                     if (!ssidFound)
                     {
-                        if (CustomMessageBox.Show("You don't seem connected to " + vehicleName + " Wifi. Please connect to it and press OK to try again", vehicleName, MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+                        if (CustomMessageBox.Show("You don't seem connected to " + vehicleName + " Wifi. Please connect to it and press OK to try again", vehicleName, MessageBoxButtons.OKCancel) == (int)DialogResult.Cancel)
                         {
                             return false;
                         }
                     }
-                    else if (CustomMessageBox.Show("You seem connected to " + vehicleName + " Wifi but it didn't answer our request. Do you want to try again?", vehicleName, MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+                    else if (CustomMessageBox.Show("You seem connected to " + vehicleName + " Wifi but it didn't answer our request. Do you want to try again?", vehicleName, MessageBoxButtons.OKCancel) == (int)DialogResult.Cancel)
                     {
                         return false;
                     }
@@ -1051,7 +962,7 @@ namespace MissionPlanner.Utilities
 
                     while (!response.Contains("connected to 192.168.42.1:9050"))
                     {
-                        if (CustomMessageBox.Show("Couldn't contact " + vehicleName + ". Press the Power button " + ntimes + " times. Do you want to try to connect again?", vehicleName, MessageBoxButtons.OKCancel) == DialogResult.Cancel)
+                        if (CustomMessageBox.Show("Couldn't contact " + vehicleName + ". Press the Power button " + ntimes + " times. Do you want to try to connect again?", vehicleName, MessageBoxButtons.OKCancel) == (int)DialogResult.Cancel)
                         {
                             return false;
                         }
@@ -1242,7 +1153,7 @@ namespace MissionPlanner.Utilities
             {
                 AdbClient.Instance.KillAdb();
             }
-
+            
             return true;
         }
 
@@ -1276,6 +1187,7 @@ namespace MissionPlanner.Utilities
         }
 
         string _message = "";
+        private RootObject firmwares;
 
         void up_LogEvent(string message, int level = 0)
         {
@@ -1316,7 +1228,8 @@ namespace MissionPlanner.Utilities
 
             if (board == BoardDetect.boards.vrbrainv40 || board == BoardDetect.boards.vrbrainv45 ||
                 board == BoardDetect.boards.vrbrainv50 || board == BoardDetect.boards.vrbrainv51 ||
-                board == BoardDetect.boards.vrbrainv52 || board == BoardDetect.boards.vrcorev10 ||
+                board == BoardDetect.boards.vrbrainv52 || board == BoardDetect.boards.vrbrainv54 ||
+                board == BoardDetect.boards.vrcorev10 ||
                 board == BoardDetect.boards.vrubrainv51 || board == BoardDetect.boards.vrubrainv52)
             {
                 return UploadVRBRAIN(filename, board);

@@ -9,7 +9,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Web;
-using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using log4net;
 using MissionPlanner.Utilities;
@@ -115,7 +114,8 @@ namespace MissionPlanner.Utilities
 
             TcpClient client = listener.EndAcceptTcpClient(ar);
 
-            new Thread(ProcessClient).Start(client);
+            var th = new Thread(ProcessClient) { IsBackground = true };
+            th.Start(client);
 
             // Signal the calling thread to continue.
             tcpClientConnected.Set();
@@ -124,6 +124,7 @@ namespace MissionPlanner.Utilities
         public void ProcessClient(object clientobj)
         {
             var client = clientobj as TcpClient;
+            using(client)
             {
                 try
                 {
@@ -466,55 +467,46 @@ namespace MissionPlanner.Utilities
 
                         SharpKml.Dom.CoordinateCollection coords = new SharpKml.Dom.CoordinateCollection();
 
-                        //if (loc.Latitude.Value != 0 && loc.Longitude.Value != 0)
+                        PointLatLngAlt home = null;
+                        // draw track
+                        try
                         {
-                            //foreach (var point in MainV2.comPort.MAV.wps.Values)
+                            foreach (var point in GCSViews.FlightPlanner.instance.pointlist)
                             {
-                                //    coords.Add(new SharpKml.Base.Vector(point.x, point.y, point.z));
+                                if (point.Tag.ToLower().Contains("home"))
+                                    home = point;
+
+                                if (point != null)
+                                    coords.Add(new SharpKml.Base.Vector(point.Lat, point.Lng, point.Alt));
                             }
                         }
-                        //else
+                        catch
                         {
-                            PointLatLngAlt home = null;
-                            // draw track
-                            try
-                            {
-                                foreach (var point in GCSViews.FlightPlanner.instance.fullpointlist)
-                                {
-                                    if (point.Tag.ToLower().Contains("home"))
-                                        home = point;
+                        }
 
-                                    if (point != null)
-                                        coords.Add(new SharpKml.Base.Vector(point.Lat, point.Lng, point.Alt));
-                                }
-                            }
-                            catch
-                            {
-                            }
+                        var altmode = SharpKml.Dom.AltitudeMode.Absolute;
 
-                            foreach (var point in GCSViews.FlightPlanner.instance.fullpointlist)
-                            {
-                                if (point == null)
-                                    continue;
+                        foreach (var point in GCSViews.FlightPlanner.instance.pointlist)
+                        {
+                            if (point == null)
+                                continue;
 
-                                SharpKml.Dom.Placemark wp = new SharpKml.Dom.Placemark();
-                                wp.Name = "WP " + point.Tag + " Alt: " + point.Alt;
-                                SharpKml.Dom.Point wppoint = new SharpKml.Dom.Point();
-                                var altmode = SharpKml.Dom.AltitudeMode.RelativeToGround;
-                                wppoint.AltitudeMode = altmode;
-                                wppoint.Coordinate = new Vector()
-                                {
-                                    Latitude = point.Lat,
-                                    Longitude = point.Lng,
-                                    Altitude = point.Alt
-                                };
-                                wp.Geometry = wppoint;
-                                kml.AddFeature(wp);
-                            }
+                            SharpKml.Dom.Placemark wp = new SharpKml.Dom.Placemark();
+                            wp.Name = "WP " + point.Tag + " Alt: " + point.Alt;
+                            SharpKml.Dom.Point wppoint = new SharpKml.Dom.Point();
+                            wppoint.AltitudeMode = altmode;
+                            wppoint.Coordinate = new Vector()
+                            {
+                                Latitude = point.Lat,
+                                Longitude = point.Lng,
+                                Altitude = point.Alt
+                            };
+                            wp.Geometry = wppoint;
+                            kml.AddFeature(wp);
                         }
 
                         SharpKml.Dom.LineString ls = new SharpKml.Dom.LineString();
-                        ls.AltitudeMode = SharpKml.Dom.AltitudeMode.RelativeToGround;
+                        ls.AltitudeMode = altmode;
                         ls.Coordinates = coords;
                         ls.Extrude = false;
                         ls.Tessellate = true;
@@ -595,7 +587,8 @@ namespace MissionPlanner.Utilities
                     /////////////////////////////////////////////////////////////////
                     else if (url.Contains(" /hud.html"))
                     {
-                        string header = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/html\r\n\r\n";
+                        var fi = new FileInfo("hud.html");
+                        string header = "HTTP/1.1 200 OK\r\nConnection: close\r\nContent-Type: text/html\r\nContent-Length: " + fi.Length + "\r\n\r\n";
                         byte[] temp = asciiEncoding.GetBytes(header);
                         stream.Write(temp, 0, temp.Length);
 
@@ -801,8 +794,6 @@ namespace MissionPlanner.Utilities
         "NAV_CONTROLLER_OUTPUT": {"msg": {"wp_dist": 0, "nav_pitch": 0.0, "target_bearing": 0, "nav_roll": 0.0, "aspd_error": 0.0, "alt_error": 0.0, "mavpackettype": "NAV_CONTROLLER_OUTPUT", "xtrack_error": 0.0, "nav_bearing": 0}, "index": 687, "time_usec": 0}}
                       */
 
-                        JavaScriptSerializer serializer = new JavaScriptSerializer();
-
                         object[] data = new object[20];
 
                         if (MainV2.comPort.MAV.getPacket((byte) MAVLink.MAVLINK_MSG_ID.ATTITUDE) != null)
@@ -903,7 +894,7 @@ namespace MissionPlanner.Utilities
 
                         packetindex++;
 
-                        string output = serializer.Serialize(message);
+                        string output = JsonConvert.SerializeObject(message);
 
                         string header = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " +
                                         output.Length + "\r\n\r\n";
@@ -931,7 +922,7 @@ namespace MissionPlanner.Utilities
 
                         if (match.Success)
                         {
-                            string fileurl = HttpUtility.UrlDecode(match.Groups[2].Value);
+                            string fileurl = WebUtility.UrlDecode(match.Groups[2].Value);
 
                             fileurl = fileurl.Replace("/mav/", "");
 

@@ -73,7 +73,7 @@ public partial class MAVLink
                     try
                     {
                         // fill in the data of the object
-                        if (buffer[0] == MAVLINK_STX)
+                        if (ismavlink2)
                         {
                             MavlinkUtil.ByteArrayToStructure(buffer, ref _data, MAVLINK_NUM_HEADER_BYTES, payloadlength);
                         }
@@ -157,6 +157,8 @@ public partial class MAVLink
 
         internal void processBuffer(byte[] buffer)
         {
+            _data = null;
+
             if (buffer[0] == MAVLINK_STX)
             {
                 header = buffer[0];
@@ -194,6 +196,11 @@ public partial class MAVLink
 
                 crc16 = (ushort) ((buffer[crc2] << 8) + buffer[crc1]);
             }
+        }
+
+        public override string ToString()
+        {
+            return String.Format("{5},{4},{0},{1},{2},{3}", sysid, compid, msgid, msgtypename, ismavlink2, rxtime);
         }
     }
 }

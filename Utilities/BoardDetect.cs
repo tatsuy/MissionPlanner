@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using System.Threading;
 using log4net;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using MissionPlanner.Comms;
 using MissionPlanner.Utilities;
 using px4uploader;
@@ -31,14 +32,18 @@ namespace MissionPlanner.Utilities
             vrbrainv50,
             vrbrainv51,
             vrbrainv52,
+            vrbrainv54,
             vrcorev10,
             vrubrainv51,
             vrubrainv52,
             bebop2,
             disco,
-            solo
+            solo,
+            revomini,
+            mindpxv2,
+            minipix
         }
-
+   
         /// <summary>
         /// Detect board version
         /// </summary>
@@ -51,11 +56,120 @@ namespace MissionPlanner.Utilities
 
             if (!MainV2.MONO)
             {
+                try
+                {
+                    // check the device reported productname
+                    var ports = Win32DeviceMgmt.GetAllCOMPorts();
+
+                    foreach (var item in ports)
+                    {
+                        log.InfoFormat("{0}: {1} - {2}", item.name, item.description, item.board);
+
+                        if (port.ToLower() == item.name.ToLower())
+                        {
+                            if (item.board == "PX4 FMU v4.x")
+                            {
+                                log.Info("is a px4v4 pixracer");
+                                return boards.px4v4;
+                            }
+                            if (item.board == "fmuv2")
+                            {
+                                log.Info("is a fmuv2");
+                                return boards.px4v2;
+                            }
+                            if (item.board == "fmuv3")
+                            {
+                                log.Info("is a fmuv3");
+                                return boards.px4v3;
+                            }
+                            if (item.board == "fmuv4")
+                            {
+                                log.Info("is a fmuv4");
+                                return boards.px4v4;
+                            }
+                            if (item.board == "PX4 FMU v2.x")
+                            {
+                                CustomMessageBox.Show(Strings.PleaseUnplugTheBoardAnd);
+
+                                DateTime DEADLINE = DateTime.Now.AddSeconds(30);
+
+                                while (DateTime.Now < DEADLINE)
+                                {
+                                    string[] allports = SerialPort.GetPortNames();
+
+                                    foreach (string port1 in allports)
+                                    {
+                                        log.Info(DateTime.Now.Millisecond + " Trying Port " + port1);
+                                        try
+                                        {
+                                            using (var up = new Uploader(port1, 115200))
+                                            {
+                                                up.identify();
+                                                Console.WriteLine(
+                                                    "Found board type {0} boardrev {1} bl rev {2} fwmax {3} on {4}",
+                                                    up.board_type,
+                                                    up.board_rev, up.bl_rev, up.fw_maxsize, port1);
+
+                                                if (up.fw_maxsize == 2080768 && up.board_type == 9 && up.bl_rev >= 5)
+                                                {
+                                                    log.Info("is a px4v3");
+                                                    return boards.px4v3;
+                                                }
+                                                else
+                                                {
+                                                    log.Info("is a px4v2");
+                                                    return boards.px4v2;
+                                                }
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            log.Error(ex);
+                                        }
+                                    }
+                                }
+
+                                log.Info("Failed to detect px4 board type");
+                                return boards.none;
+                            }
+                            /*
+                            if (item.board == "Arduino Mega 2560")
+                            {
+                                log.Info("is a 2560v2");
+                                return boards.b2560v2;
+                            }*/
+                            if (item.board == "revo-mini")
+                            {
+                                log.Info("is a revo-mini");
+                                return boards.revomini;
+                            }
+                            if (item.board == "mini-pix")
+                            {
+                                log.Info("is a mini-pix");
+                                return boards.minipix;
+                            }
+                            if (item.board == "mindpx-v2")
+                            {
+                                log.Info("is a mindpx-v2");
+                                return boards.mindpxv2;
+                            }
+                        }
+                    }
+                } catch { }
+
                 ObjectQuery query = new ObjectQuery("SELECT * FROM Win32_SerialPort"); // Win32_USBControllerDevice
                 ManagementObjectSearcher searcher = new ManagementObjectSearcher(query);
                 foreach (ManagementObject obj2 in searcher.Get())
                 {
-                    Console.WriteLine("PNPID: " + obj2.Properties["PNPDeviceID"].Value.ToString());
+                    log.InfoFormat("-----------------------------------");
+                    log.InfoFormat("Win32_USBDevice instance");
+                    log.InfoFormat("-----------------------------------");
+   
+                    foreach (var item in obj2.Properties)
+                    {
+                        log.InfoFormat("{0}: {1}", item.Name, item.Value);
+                    }
+
 
                     // check vid and pid
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_2341&PID_0010"))
@@ -78,7 +192,8 @@ namespace MissionPlanner.Utilities
                         }
                     }
 
-                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0011"))
+                    // chibios or normal px4
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_0483&PID_5740") || obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0011"))
                     {
                         CustomMessageBox.Show(Strings.PleaseUnplugTheBoardAnd);
 
@@ -101,7 +216,7 @@ namespace MissionPlanner.Utilities
                                             up.board_type,
                                             up.board_rev, up.bl_rev, up.fw_maxsize, port1);
 
-                                        if (up.fw_maxsize == 2080768 && up.board_type == 9)
+                                        if (up.fw_maxsize == 2080768 && up.board_type == 9 && up.bl_rev >= 5)
                                         {
                                             log.Info("is a px4v3");
                                             return boards.px4v3;
@@ -122,6 +237,12 @@ namespace MissionPlanner.Utilities
 
                         log.Info("Failed to detect px4 board type");
                         return boards.none;
+                    }
+
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0021"))
+                    {
+                        log.Info("is a px4v3 X2.1");
+                        return boards.px4v3;
                     }
 
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0012"))
@@ -182,6 +303,12 @@ namespace MissionPlanner.Utilities
                         return boards.vrbrainv52;
                     }
 
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_27AC&PID_1154"))
+                    {
+                        log.Info("is a vrbrain 5.4 bootloader");
+                        return boards.vrbrainv54;
+                    }
+
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_27AC&PID_1910"))
                     {
                         log.Info("is a vrbrain core 1.0 bootloader");
@@ -204,26 +331,26 @@ namespace MissionPlanner.Utilities
             else
             {
                 // if its mono
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
                 {
                     return boards.b2560v2;
                 }
                 else
                 {
-                    if (DialogResult.Yes ==
+                    if ((int)DialogResult.Yes ==
                         CustomMessageBox.Show("Is this a PX4/PIXHAWK/PIXRACER?", "PX4/PIXHAWK", MessageBoxButtons.YesNo))
                     {
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a PIXRACER?", "PIXRACER", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v4;
                         }
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a CUBE?", "CUBE", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v3;
                         }
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a PIXHAWK?", "PIXHAWK", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v2;
@@ -237,14 +364,14 @@ namespace MissionPlanner.Utilities
                 }
             }
 
-            if (DialogResult.Yes == CustomMessageBox.Show("Is this a Linux board?", "Linux", MessageBoxButtons.YesNo))
+            if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a Linux board?", "Linux", MessageBoxButtons.YesNo))
             {
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this Bebop2?", "Bebop2", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this Bebop2?", "Bebop2", MessageBoxButtons.YesNo))
                 {
                     return boards.bebop2;
                 }
 
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this Disco?", "Disco", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this Disco?", "Disco", MessageBoxButtons.YesNo))
                 {
                     return boards.disco;
                 }
@@ -358,16 +485,16 @@ namespace MissionPlanner.Utilities
             serialPort.Close();
             log.Warn("Not a 2560");
 
-            if (DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
+            if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
             {
                 return boards.b2560v2;
             }
             else
             {
-                if (DialogResult.Yes ==
+                if ((int)DialogResult.Yes ==
                     CustomMessageBox.Show("Is this a PX4/PIXHAWK?", "PX4/PIXHAWK", MessageBoxButtons.YesNo))
                 {
-                    if (DialogResult.Yes ==
+                    if ((int)DialogResult.Yes ==
                         CustomMessageBox.Show("Is this a PIXHAWK?", "PIXHAWK", MessageBoxButtons.YesNo))
                     {
                         return boards.px4v2;
