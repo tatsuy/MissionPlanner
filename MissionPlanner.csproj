@@ -6,8 +6,8 @@
     <OutputType>Exe</OutputType>
     <StartupObject></StartupObject>
     <Authors>Michael Oborne</Authors>
-    <Version>1.3.56.3</Version>
-    <DebugType>full</DebugType>
+    <Version>1.3.59.3</Version>
+    <DebugType>portable</DebugType>
     <Company>Michael Oborne</Company>
     <Product>Mission Planner</Product>
     <Description>Mission Planner ground control station for ardupilot</Description>
@@ -19,6 +19,7 @@
     <EnableDefaultItems>false</EnableDefaultItems>
     <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <ApplicationManifest>Properties\app.manifest</ApplicationManifest>
  </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)'=='Debug' ">
     <BumpRevision>false</BumpRevision>
@@ -66,6 +67,13 @@
     <None Remove="packages\**" />
   </ItemGroup> 
   <ItemGroup>
+    <Reference Include="BitMiracle.LibTiff.NetStandard">
+      <HintPath>.\extlibs\BitMiracle.LibTiff.NetStandard.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Ionic.Zip.NetStandard">
+      <HintPath>ExtLibs\Ionic.Zip.NetStandard.dll</HintPath>
+    </Reference>
     <Reference Include="OpenTK">
       <HintPath>ExtLibs\OpenTK.dll</HintPath>
     </Reference>
@@ -81,11 +89,6 @@
     <Reference Include="System.Web.Extensions" />
 
     <Reference Include="System.Windows.Forms" />
-
-    <Reference Include="Transitions">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>ExtLibs\Transitions.dll</HintPath>
-    </Reference>
 
   </ItemGroup>
   
@@ -131,6 +134,7 @@
       <Project>{e06def77-f933-42fb-afd7-db2d0d8d6a98}</Project>
       <Name>GMap.NET.WindowsForms</Name>
     </ProjectReference>
+    <ProjectReference Include="ExtLibs\ICSharpCode.SharpZipLib\ICSharpCode.SharpZipLib.csproj" />
     <ProjectReference Include="ExtLibs\KMLib\KMLib.csproj">
       <Project>{29976BA4-A04D-4A80-A866-098C879C2FDE}</Project>
       <Name>KMLib</Name>
@@ -168,14 +172,17 @@
       <Project>{cf402948-a3f4-4962-8a57-e40b46759d25}</Project>
       <Name>solo</Name>
     </ProjectReference>
+    <ProjectReference Include="ExtLibs\Strings\MissionPlanner.Strings.csproj" />
     <ProjectReference Include="ExtLibs\tlogThumbnailHandler\tlogThumbnailHandler.csproj">
       <Project>{aba78b2e-77c3-4377-8568-9542ac227971}</Project>
       <Name>tlogThumbnailHandler</Name>
     </ProjectReference>
+    <ProjectReference Include="ExtLibs\Transitions\Transitions.csproj" />
     <ProjectReference Include="ExtLibs\Utilities\MissionPlanner.Utilities.csproj">
       <Project>{1378A66C-38E4-46F5-A05F-DC04EF7D4D16}</Project>
       <Name>MissionPlanner.Utilities</Name>
     </ProjectReference>
+    <ProjectReference Include="ExtLibs\WebCamService\WebCamService.csproj" />
     <ProjectReference Include="ExtLibs\ZedGraph\ZedGraph.csproj">
       <Project>{2541686B-1673-43BF-AF89-3163945DB009}</Project>
       <Name>ZedGraph</Name>
@@ -186,18 +193,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="alglibnet2" version="0.0.0" targetFramework="net40" />
-    <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.560" />
-    <PackageReference Include="BouncyCastle" version="1.8.1" targetFramework="net40" />
-    <PackageReference Include="Community.CsharpSqlite.SQLiteClient" version="3.7.7.3" targetFramework="net462" />
-    <PackageReference Include="CSMatIO" version="1.0.2" targetFramework="net40" requireReinstallation="true" />
+    <PackageReference Include="CSMatIO" version="1.0.20" targetFramework="netstandard2.0" requireReinstallation="true" />
     <PackageReference Include="DirectShowLib" Version="1.0.0" />
-    <PackageReference Include="DotNetZip" version="1.10.1" targetFramework="net40" />
     <PackageReference Include="DotSpatial.Data" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Data.Forms" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Extensions" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Modeling.Forms" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Mono" version="1.9" targetFramework="net462" />
+    <PackageReference Include="DotSpatial.Positioning" Version="1.9.0" />
     <PackageReference Include="DotSpatial.Projections" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Projections.Forms" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Serialization" version="1.9" targetFramework="net462" />
@@ -205,34 +208,34 @@
     <PackageReference Include="DotSpatial.Symbology.Forms" version="1.9" targetFramework="net462" />
     <PackageReference Include="DotSpatial.Topology" version="1.9" targetFramework="net462" />
 
-    <PackageReference Include="Flurl" version="2.5.0" targetFramework="net462" />
-    <PackageReference Include="Flurl.Http" version="2.0.1" targetFramework="net462" />
+    <PackageReference Include="Flurl" version="2.8.0" targetFramework="net462" />
+    <PackageReference Include="Flurl.Http" version="2.3.2" targetFramework="net462" />
     <PackageReference Include="GDAL" Version="1.11.1" />
     <PackageReference Include="GeoJSON.Net" version="1.1.64" targetFramework="net462" />
-    <PackageReference Include="IronPython" version="2.7.7" targetFramework="net462" />
-    <PackageReference Include="IronPython.StdLib" version="2.7.7" targetFramework="net462" />
+    <PackageReference Include="IronPython" version="2.7.8.1" targetFramework="net462" />
+    <PackageReference Include="IronPython.StdLib" version="2.7.8.1" targetFramework="net462" />
     <PackageReference Include="log4net" version="2.0.8" targetFramework="net462" />
-    <PackageReference Include="Microsoft.Win32.Registry" Version="4.4.0" />
+    <PackageReference Include="Microsoft.Win32.Registry" Version="4.5.0" />
     <PackageReference Include="MP.GDAL.Native" Version="2.2.3" />
-
-    <PackageReference Include="netDXF" version="2.0.2" targetFramework="net462" />
-    <PackageReference Include="Newtonsoft.Json" version="10.0.3" targetFramework="net462" />
-    <PackageReference Include="ProjNet" version="1.2" targetFramework="net40" />
-    <PackageReference Include="protobuf-net" version="2.1.0" targetFramework="net40" requireReinstallation="true" />
-    <PackageReference Include="SharpDX" version="4.0.1" targetFramework="net462" />
-    <PackageReference Include="SharpDX.DirectInput" version="4.0.1" targetFramework="net462" />
-    <PackageReference Include="SharpZipLib" version="0.86.0" targetFramework="net40" />
-    <PackageReference Include="SkiaSharp" Version="1.60.0" />
+    <PackageReference Include="Newtonsoft.Json" version="11.0.2" targetFramework="net462" />
+    <PackageReference Include="OpenTK" Version="3.0.1" />
+    <PackageReference Include="OpenTK.GLControl" Version="3.0.1" />
+    <PackageReference Include="SharpDX" version="4.1.0" targetFramework="net462" />
+    <PackageReference Include="SharpDX.DirectInput" version="4.1.0" targetFramework="net462" />
+    <PackageReference Include="SixLabors.ImageSharp" Version="1.0.0-beta0005" />
+    <PackageReference Include="SixLabors.ImageSharp.Drawing" Version="1.0.0-beta0005" />
+    <PackageReference Include="SkiaSharp" Version="1.60.3" />
+    <PackageReference Include="SkiaSharp.Views" Version="1.60.3" />
     <PackageReference Include="SSH.NET" version="2016.1.0" targetFramework="net40" />
-    <PackageReference Include="System.Drawing.Common" Version="4.5.0-rc1" />
-    <PackageReference Include="System.IO.Ports" Version="4.4.0" />
-    <PackageReference Include="System.Reactive" Version="3.1.1" />
-    <PackageReference Include="System.Reactive.Core" Version="3.1.1" />
-    <PackageReference Include="System.Reactive.Linq" Version="3.1.1" />
+    <PackageReference Include="System.Drawing.Common" Version="4.5.0" />
+    <PackageReference Include="System.IO.Ports" Version="4.5.0" />
+    <PackageReference Include="System.Reactive" Version="4.1.0" />
+    <PackageReference Include="System.Reactive.Core" Version="4.1.0" />
+    <PackageReference Include="System.Reactive.Linq" Version="4.1.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="4.5.0" />
     <PackageReference Include="System.Threading.Tasks" Version="4.3.0" />
 
     <PackageReference Include="Unofficial.ObjectListView" version="2.6.0" targetFramework="net40" />
-    <PackageReference Include="Xamarin.Forms" version="3.0.0.446417" targetFramework="net462" />
     <PackageReference Include="zlib.net" version="1.0.4.0" targetFramework="net40" />
   </ItemGroup>
 
@@ -248,9 +251,11 @@
     </Compile>
     <Compile Include="ElevationProfile.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="FollowMe.cs"> <SubType>Control</SubType> </Compile>
+    <Compile Include="Swarm\PaintEventArgsI.cs" />
     <Compile Include="Swarm\TD\UI.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Utilities\AltitudeAngel\MissionPlannerStateAdapter.cs" />
     <Compile Include="Utilities\SSHTerminal.cs" />
     <Compile Include="Utilities\XTermRBGColors.cs" />
     <Compile Include="GenOTP.cs"> <SubType>Control</SubType> </Compile>
@@ -282,7 +287,6 @@
     <Compile Include="SerialOutputNMEA.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="SerialOutputPass.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="Splash.cs"> <SubType>Control</SubType> </Compile>
-    <Compile Include="Strings.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="Swarm\Sequence\Controller.cs" />
     <Compile Include="Swarm\Sequence\Drone.cs" />
     <Compile Include="Swarm\Sequence\DroneGroup.cs" />
@@ -372,7 +376,7 @@
     <Compile Include="GCSViews\ConfigurationView\ConfigHWParachute.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigHWPX4Flow.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigHWRangeFinder.cs"> <SubType>Control</SubType> </Compile>
-    <Compile Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.cs"> <SubType>Control</SubType> </Compile>
+    <Compile Include="GCSViews\ConfigurationView\ConfigHWCAN.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMandatory.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMotorTest.cs"> <SubType>Control</SubType> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMount.cs"> <SubType>Control</SubType> </Compile>
@@ -517,7 +521,6 @@
     <Compile Include="SerialOutputNMEA.Designer.cs"><DependentUpon>SerialOutputNMEA.cs</DependentUpon> </Compile>
     <Compile Include="SerialOutputPass.Designer.cs"><DependentUpon>SerialOutputPass.cs</DependentUpon> </Compile>
     <Compile Include="Splash.Designer.cs"><DependentUpon>Splash.cs</DependentUpon> </Compile>
-    <Compile Include="Strings.Designer.cs"><DependentUpon>Strings.cs</DependentUpon> </Compile>
     <Compile Include="temp.Designer.cs"><DependentUpon>temp.cs</DependentUpon> </Compile>
     <Compile Include="Antenna\Tracker.Designer.cs"><DependentUpon>Tracker.cs</DependentUpon> </Compile>
     <Compile Include="Controls\AuthKeys.Designer.cs"><DependentUpon>AuthKeys.cs</DependentUpon> </Compile>
@@ -573,7 +576,7 @@
     <Compile Include="GCSViews\ConfigurationView\ConfigHWParachute.Designer.cs"><DependentUpon>ConfigHWParachute.cs</DependentUpon> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigHWPX4Flow.Designer.cs"><DependentUpon>ConfigHWPX4Flow.cs</DependentUpon> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigHWRangeFinder.Designer.cs"><DependentUpon>ConfigHWRangeFinder.cs</DependentUpon> </Compile>
-    <Compile Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.Designer.cs"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </Compile>
+    <Compile Include="GCSViews\ConfigurationView\ConfigHWCAN.Designer.cs"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMandatory.Designer.cs"><DependentUpon>ConfigMandatory.cs</DependentUpon> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMotorTest.Designer.cs"><DependentUpon>ConfigMotorTest.cs</DependentUpon> </Compile>
     <Compile Include="GCSViews\ConfigurationView\ConfigMount.Designer.cs"><DependentUpon>ConfigMount.cs</DependentUpon> </Compile>
@@ -769,16 +772,7 @@
     <EmbeddedResource Include="SerialOutputPass.tr.resx"><DependentUpon>SerialOutputPass.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="SerialOutputPass.zh-Hans.resx"><DependentUpon>SerialOutputPass.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="Splash.resx"><DependentUpon>Splash.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.az-Latn-AZ.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.de-DE.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.id-ID.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.ja-JP.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.ko-KR.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.pt.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.ru-KZ.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.tr.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="Strings.zh-Hans.resx"><DependentUpon>Strings.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="Swarm\Sequence\LayoutEditor.resx" />
     <EmbeddedResource Include="Swarm\TD\UI.resx" />
     <EmbeddedResource Include="temp.resx"><DependentUpon>temp.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="Antenna\Tracker.resx"><DependentUpon>Tracker.cs</DependentUpon> </EmbeddedResource>
@@ -1340,13 +1334,13 @@
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWRangeFinder.zh-Hans.resx"><DependentUpon>ConfigHWRangeFinder.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWRangeFinder.zh-Hant.resx"><DependentUpon>ConfigHWRangeFinder.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWRangeFinder.zh-TW.resx"><DependentUpon>ConfigHWRangeFinder.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.ar.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.az-Latn-AZ.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.de-DE.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.pt.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.ru-KZ.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
-    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWUAVCAN.tr.resx"><DependentUpon>ConfigHWUAVCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.ar.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.az-Latn-AZ.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.de-DE.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.pt.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.ru-KZ.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
+    <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigHWCAN.tr.resx"><DependentUpon>ConfigHWCAN.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigMandatory.resx"><DependentUpon>ConfigMandatory.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigMandatory.ar.resx"><DependentUpon>ConfigMandatory.cs</DependentUpon> </EmbeddedResource>
     <EmbeddedResource Include="GCSViews\ConfigurationView\ConfigMandatory.az-Latn-AZ.resx"><DependentUpon>ConfigMandatory.cs</DependentUpon> </EmbeddedResource>
@@ -1902,26 +1896,10 @@
     <None Include="block_plane_0.dae">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="DLLs\fftpack_lite.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="DLLs\lapack_lite.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="DLLs\mtrand.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="DLLs\ndarray.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="DLLs\NpyAccessLib.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="DLLs\NumpyDotNet.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Include="Drivers\arduinomega2560.cat" />
     <None Include="Drivers\ArduinoMEGA2560.inf" />
+    <None Include="Drivers\chibios.cat" />
+    <None Include="Drivers\ChibiOS.inf" />
     <None Include="Drivers\cube.cat">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -2021,9 +1999,6 @@
     <None Include="Drivers\vrugimbal.inf">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <None Include="Lib.zip">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
     <None Include="m3u\both.m3u">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -2097,6 +2072,7 @@
     <None Include="Scripts\TAKEOFF.py">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <Compile Include="Swarm\GL2.cs" />
     <None Include="version.exe">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -2117,8 +2093,17 @@
 
 
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
-    <Exec Command="echo $(TargetDir)" />
+    <Exec Command="echo $(TargetDir)&#xD;&#xA;" />
   </Target>
+
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
 
 
   <ItemGroup>

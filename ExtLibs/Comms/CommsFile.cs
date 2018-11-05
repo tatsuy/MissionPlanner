@@ -126,7 +126,22 @@ namespace MissionPlanner.Comms
         }
 
         // Properties
-        public Stream BaseStream { get; private set; }
+        private Stream _stream;
+        public Stream BaseStream
+        {
+            get { return _stream; }
+            set
+            {
+                _stream = value;
+                length = _stream.Length;
+            }
+        }
+
+        public void SetLength(long length)
+        {
+            this.length = length;
+        }
+
         public int BaudRate { get; set; }
         public int BytesToRead { get { if (!BaseStream.CanRead) return 0; return (int)(BaseStream.Length - BaseStream.Position); } }
         public int BytesToWrite { get; set; }

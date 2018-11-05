@@ -40,6 +40,8 @@ using Placemark = SharpKml.Dom.Placemark;
 using Point = System.Drawing.Point;
 using System.Text.RegularExpressions;
 using GDAL;
+using GeoAPI.CoordinateSystems;
+using GeoAPI.CoordinateSystems.Transformations;
 using MissionPlanner.ArduPilot;
 using MissionPlanner.Grid;
 using MissionPlanner.Plugin;
@@ -51,7 +53,6 @@ namespace MissionPlanner.GCSViews
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         int selectedrow;
         public bool quickadd;
-        bool isonline = true;
         bool sethome;
         bool polygongridmode;
         bool splinemode;
@@ -61,7 +62,7 @@ namespace MissionPlanner.GCSViews
 
         public static FlightPlanner instance;
 
-        public List<PointLatLngAlt> pointlist { get; set; }
+        public List<PointLatLngAlt> pointlist { get; set; } = new List<PointLatLngAlt>();
 
         static public Object thisLock = new Object();
         private ComponentResourceManager rm = new ComponentResourceManager(typeof (FlightPlanner));
@@ -894,17 +895,6 @@ namespace MissionPlanner.GCSViews
 
             trackBar1.Value = (int) MainMap.Zoom;
 
-            // check for net and set offline if needed
-            try
-            {
-                IPAddress[] addresslist = Dns.GetHostAddresses("www.google.com");
-            }
-            catch (Exception)
-            {
-                // here if dns failed
-                isonline = false;
-            }
-
             updateCMDParams();
 
             panelMap.Visible = false;
@@ -1290,6 +1280,9 @@ namespace MissionPlanner.GCSViews
             if (quickadd)
                 return;
 
+            if (Disposing)
+                return;
+
             updateRowNumbers();
 
             PointLatLngAlt home = new PointLatLngAlt();
@@ -1400,7 +1393,7 @@ namespace MissionPlanner.GCSViews
                 fd.FileName = wpfilename;
                 DialogResult result = fd.ShowDialog();
                 string file = fd.FileName;
-                if (file != "")
+                if (file != "" && result == DialogResult.OK)
                 {
                     try
                     {
@@ -1724,6 +1717,7 @@ namespace MissionPlanner.GCSViews
             };
 
             frmProgressReporter.DoWork += saveWPs;
+
             frmProgressReporter.UpdateProgressAndStatus(-1, "Sending WP's");
 
             ThemeManager.ApplyThemeTo(frmProgressReporter);
@@ -1774,6 +1768,11 @@ namespace MissionPlanner.GCSViews
             }
         }
 
+        internal IList<Locationwp> GetFlightPlanLocations()
+        {
+            return GetCommandList().AsReadOnly();
+        }
+
         List<Locationwp> GetCommandList()
         {
             List<Locationwp> commands = new List<Locationwp>();
@@ -1797,7 +1796,11 @@ namespace MissionPlanner.GCSViews
             var sub1 = MainV2.comPort.SubscribeToPacketType(MAVLink.MAVLINK_MSG_ID.MISSION_ACK,
                 message =>
                 {
-                    var ans = (MAVLink.MAV_MISSION_RESULT)((MAVLink.mavlink_mission_ack_t) message.data).type;
+                    var data = ((MAVLink.mavlink_mission_ack_t) message.data);
+                    var ans = (MAVLink.MAV_MISSION_RESULT) data.type;
+                    if (MainV2.comPort.MAV.sysid != message.sysid &&
+                        MainV2.comPort.MAV.compid != message.compid)
+                        return true;
                     result = ans;
                     Console.WriteLine("MISSION_ACK " + ans);
                     return true;
@@ -1806,7 +1809,11 @@ namespace MissionPlanner.GCSViews
             var sub2 = MainV2.comPort.SubscribeToPacketType(MAVLink.MAVLINK_MSG_ID.MISSION_REQUEST,
                 message =>
                 {
-                    reqno = ((MAVLink.mavlink_mission_request_t) message.data).seq;
+                    var data = ((MAVLink.mavlink_mission_request_t)message.data);
+                    if (MainV2.comPort.MAV.sysid != message.sysid &&
+                        MainV2.comPort.MAV.compid != message.compid)
+                        return true;
+                    reqno = data.seq;
                     Console.WriteLine("MISSION_REQUEST " + reqno);
                     return true;
                 });
@@ -2362,7 +2369,7 @@ namespace MissionPlanner.GCSViews
 
             writeKML();
 
-            MainMap.ZoomAndCenterMarkers("objects");
+            MainMap.ZoomAndCenterMarkers("WPOverlay");
 
             MainMap_OnMapZoomChanged();
         }
@@ -2653,7 +2660,7 @@ namespace MissionPlanner.GCSViews
 
                             writeKML();
 
-                            MainMap.ZoomAndCenterMarkers("objects");
+                            MainMap.ZoomAndCenterMarkers("WPOverlay");
                         }
                         else
                         {
@@ -2751,7 +2758,7 @@ namespace MissionPlanner.GCSViews
 
                 writeKML();
 
-                MainMap.ZoomAndCenterMarkers("objects");
+                MainMap.ZoomAndCenterMarkers("WPOverlay");
             }
             catch (Exception ex)
             {
@@ -2792,7 +2799,7 @@ namespace MissionPlanner.GCSViews
 
             CoordinateTransformationFactory ctfac = new CoordinateTransformationFactory();
 
-            GeographicCoordinateSystem wgs84 = GeographicCoordinateSystem.WGS84;
+            IGeographicCoordinateSystem wgs84 = GeographicCoordinateSystem.WGS84;
 
             int utmzone = (int) ((polygon[0].Lng - -186.0)/6.0);
 
@@ -2982,8 +2989,6 @@ namespace MissionPlanner.GCSViews
         void MainMap_OnMapTypeChanged(GMapProvider type)
         {
             comboBoxMapType.SelectedItem = MainMap.MapProvider;
-
-            MainMap.ZoomAndCenterMarkers("objects");
 
             if (type == WMSProvider.Instance)
             {
@@ -3268,7 +3273,7 @@ namespace MissionPlanner.GCSViews
                     poly.Points.Add(MouseDownEnd);
                     poly.Points.Add(new PointLatLng(MouseDownEnd.Lat, MouseDownStart.Lng));
 
-                    foreach (var marker in objectsoverlay.Markers)
+                    foreach (var marker in MainMap.Overlays.First(a => a.Id == "WPOverlay").Markers)
                     {
                         if (poly.IsInside(marker.Position))
                         {
@@ -3306,11 +3311,13 @@ namespace MissionPlanner.GCSViews
                     {
                         Dictionary<string, PointLatLng> dest = new Dictionary<string, PointLatLng>();
 
-                        foreach (var markerid in groupmarkers)
+                        var markers = MainMap.Overlays.First(a => a.Id == "WPOverlay");
+                        
+                        foreach (var markerid in groupmarkers.Distinct())
                         {
-                            for (int a = 0; a < objectsoverlay.Markers.Count; a++)
+                            for (int a = 0; a < markers.Markers.Count; a++)
                             {
-                                var marker = objectsoverlay.Markers[a];
+                                var marker = markers.Markers[a];
 
                                 if (marker.Tag != null && marker.Tag.ToString() == markerid.ToString())
                                 {
@@ -3433,17 +3440,19 @@ namespace MissionPlanner.GCSViews
 
                     MouseDownStart = point;
 
+                    var markers = MainMap.Overlays.First(a => a.Id == "WPOverlay");
+
                     Hashtable seen = new Hashtable();
 
                     foreach (var markerid in groupmarkers)
                     {
                         if (seen.ContainsKey(markerid))
                             continue;
-
+                      
                         seen[markerid] = 1;
-                        for (int a = 0; a < objectsoverlay.Markers.Count; a++)
+                        for (int a = 0; a < markers.Markers.Count; a++)
                         {
-                            var marker = objectsoverlay.Markers[a];
+                            var marker = markers.Markers[a];
 
                             if (marker.Tag != null && marker.Tag.ToString() == markerid.ToString())
                             {
@@ -4104,7 +4113,10 @@ namespace MissionPlanner.GCSViews
             quickadd = true;
 
             // mono fix
-            Commands.CurrentCell = null;
+            try
+            {
+                Commands.CurrentCell = null;
+            } catch { }
 
             Commands.Rows.Clear();
 
@@ -4746,8 +4758,8 @@ namespace MissionPlanner.GCSViews
             using (SaveFileDialog sf = new SaveFileDialog())
             {
                 sf.Filter = "Fence (*.fen)|*.fen";
-                sf.ShowDialog();
-                if (sf.FileName != "")
+                var result = sf.ShowDialog();
+                if (sf.FileName != "" && result == DialogResult.OK)
                 {
                     try
                     {
@@ -5699,8 +5711,8 @@ namespace MissionPlanner.GCSViews
             using (SaveFileDialog sf = new SaveFileDialog())
             {
                 sf.Filter = "Polygon (*.poly)|*.poly";
-                sf.ShowDialog();
-                if (sf.FileName != "")
+                var result = sf.ShowDialog();
+                if (sf.FileName != "" && result == DialogResult.OK)
                 {
                     try
                     {
@@ -6027,6 +6039,8 @@ namespace MissionPlanner.GCSViews
             {
                 CustomMessageBox.Show(Strings.InvalidAlt, Strings.ERROR);
             }
+
+            isMouseClickOffMenu = false;
         }
 
         private void clearRallyPointsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -6221,8 +6235,8 @@ Column 1: Field type (RALLY is the only one at the moment -- may have RALLY_LAND
             using (SaveFileDialog sf = new SaveFileDialog())
             {
                 sf.Filter = "Rally (*.ral)|*.ral";
-                sf.ShowDialog();
-                if (sf.FileName != "")
+                var result = sf.ShowDialog();
+                if (sf.FileName != "" && result == DialogResult.OK)
                 {
                     try
                     {
@@ -6471,7 +6485,7 @@ Column 1: Field type (RALLY is the only one at the moment -- may have RALLY_LAND
 
                 writeKML();
 
-                MainMap.ZoomAndCenterMarkers("objects");
+                MainMap.ZoomAndCenterMarkers("WPOverlay");
             }
         }
 
@@ -6875,6 +6889,92 @@ Column 1: Field type (RALLY is the only one at the moment -- may have RALLY_LAND
         private void Commands_RowsRemoved(object sender, DataGridViewRowsRemovedEventArgs e)
         {
             writeKML();
+        }
+
+        private void but_writewpfast_Click(object sender, EventArgs e)
+        {
+            if ((altmode)CMB_altmode.SelectedValue == altmode.Absolute)
+            {
+                if ((int)DialogResult.No ==
+                    CustomMessageBox.Show("Absolute Alt is selected are you sure?", "Alt Mode", MessageBoxButtons.YesNo))
+                {
+                    CMB_altmode.SelectedValue = (int)altmode.Relative;
+                }
+            }
+
+            // check home
+            Locationwp home = new Locationwp();
+            try
+            {
+                home.id = (ushort)MAVLink.MAV_CMD.WAYPOINT;
+                home.lat = (double.Parse(TXT_homelat.Text));
+                home.lng = (double.Parse(TXT_homelng.Text));
+                home.alt = (float.Parse(TXT_homealt.Text) / CurrentState.multiplierdist); // use saved home
+            }
+            catch
+            {
+                CustomMessageBox.Show("Your home location is invalid", Strings.ERROR);
+                return;
+            }
+
+            // check for invalid grid data
+            for (int a = 0; a < Commands.Rows.Count - 0; a++)
+            {
+                for (int b = 0; b < Commands.ColumnCount - 0; b++)
+                {
+                    double answer;
+                    if (b >= 1 && b <= 7)
+                    {
+                        if (!double.TryParse(Commands[b, a].Value.ToString(), out answer))
+                        {
+                            CustomMessageBox.Show("There are errors in your mission");
+                            return;
+                        }
+                    }
+
+                    if (TXT_altwarn.Text == "")
+                        TXT_altwarn.Text = (0).ToString();
+
+                    if (Commands.Rows[a].Cells[Command.Index].Value.ToString().Contains("UNKNOWN"))
+                        continue;
+
+                    ushort cmd =
+                        (ushort)
+                                Enum.Parse(typeof(MAVLink.MAV_CMD),
+                                    Commands.Rows[a].Cells[Command.Index].Value.ToString(), false);
+
+                    if (cmd < (ushort)MAVLink.MAV_CMD.LAST &&
+                        double.Parse(Commands[Alt.Index, a].Value.ToString()) < double.Parse(TXT_altwarn.Text))
+                    {
+                        if (cmd != (ushort)MAVLink.MAV_CMD.TAKEOFF &&
+                            cmd != (ushort)MAVLink.MAV_CMD.LAND &&
+                            cmd != (ushort)MAVLink.MAV_CMD.RETURN_TO_LAUNCH)
+                        {
+                            CustomMessageBox.Show("Low alt on WP#" + (a + 1) +
+                                                  "\nPlease reduce the alt warning, or increase the altitude");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            IProgressReporterDialogue frmProgressReporter = new ProgressReporterDialogue
+            {
+                StartPosition = FormStartPosition.CenterScreen,
+                Text = "Sending WP's"
+            };
+
+            frmProgressReporter.DoWork += saveWPsFast;
+
+            frmProgressReporter.UpdateProgressAndStatus(-1, "Sending WP's");
+
+            ThemeManager.ApplyThemeTo(frmProgressReporter);
+
+            frmProgressReporter.RunBackgroundOperationAsync();
+
+            frmProgressReporter.Dispose();
+
+            MainMap.Focus();
         }
     }
 }

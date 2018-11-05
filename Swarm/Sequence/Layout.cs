@@ -23,7 +23,7 @@ namespace MissionPlanner.Swarm.Sequence
 
         public void Save(string filename)
         {
-            var json = JsonConvert.SerializeObject(this);
+            var json = JsonConvert.SerializeObject(this, Formatting.Indented);
 
             File.WriteAllText(filename, json);
         }
@@ -32,6 +32,10 @@ namespace MissionPlanner.Swarm.Sequence
     public class Layout
     {
         public string Id { get; set; }
+
+        public int DelayStart { get; set; }
+
+        public int DelayEnd { get; set; }
 
         public Dictionary<int, Vector3> Offset = new Dictionary<int, Vector3>();
 

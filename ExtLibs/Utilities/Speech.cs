@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Speech.Synthesis;
 using System.Text.RegularExpressions;
@@ -12,9 +13,7 @@ namespace MissionPlanner.Utilities
     {
         private static readonly ILog log = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
-        public static Speech Instance { get; } = new Speech();
-
-        public static bool speechEnable { get; set; } = false;
+        public bool speechEnable { get; set; } = false;
 
         SpeechSynthesizer _speechwindows;
         System.Diagnostics.Process _speechlinux;
@@ -105,8 +104,15 @@ namespace MissionPlanner.Utilities
             }
             else
             {
-                if (_speechwindows != null)
-                    _speechwindows.SpeakAsync(text);
+                try
+                {
+                    if (_speechwindows != null)
+                        _speechwindows.SpeakAsync(text);
+                }
+                catch (COMException)
+                {
+
+                }
             }
 
             log.Info("TTS: say " + text);

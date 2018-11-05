@@ -197,7 +197,7 @@ namespace MissionPlanner.Swarm.TD
                             if (!drone.MavState.cs.armed)
                             {
                                 drone.takeoffdone = false;
-                                if (!drone.MavState.parent.doARM(drone.MavState.sysid, drone.MavState.compid, true))
+                                if (!drone.MavState.parent.doARM(drone.MavState.sysid, drone.MavState.compid, true, true))
                                     return;
                             }
                         }
@@ -304,9 +304,15 @@ namespace MissionPlanner.Swarm.TD
 
                         if (drone.commandsent)
                         {
+                            drone.TargetLocation = drone.Location;
+                            drone.TargetVelocity.X = -0.1;
                             //drone.SendYaw(drone.MavState.cs.yaw + 5);
                             drone.commandsent = false;
-                            continue;
+                            //continue;
+                        }
+                        else
+                        {
+                            drone.TargetVelocity.X = 0;
                         }
 
                         // position control
@@ -424,7 +430,7 @@ namespace MissionPlanner.Swarm.TD
                 var y = short.MaxValue;
                 var z = 0;
                 var yaw = 0;*/
-                
+
                 // matrix with our current copter yaw
                 var Matrix = new Matrix3();
 

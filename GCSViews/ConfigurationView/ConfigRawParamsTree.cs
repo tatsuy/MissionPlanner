@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -17,7 +18,7 @@ using MissionPlanner.Utilities;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigRawParamsTree : UserControl, IActivate, IDeactivate
+    public partial class ConfigRawParamsTree : MyUserControl, IActivate, IDeactivate
     {
         // from http://stackoverflow.com/questions/2512781/winforms-big-paragraph-tooltip/2512895#2512895
         private const int maximumSingleLineTooltipLength = 50;
@@ -50,9 +51,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             foreach (ColumnHeader col in Params.Columns)
             {
-                if (!String.IsNullOrEmpty(Settings.Instance["rawtree_" + col.Name + "_width"]))
+                if (!String.IsNullOrEmpty(Settings.Instance["rawtree_" + col.Text + "_percent"]))
                 {
-                    col.Width = Math.Max(50, Settings.Instance.GetInt32("rawtree_" + col.Name + "_width"));
+                    col.Width = Math.Max(50,
+                        Params.GetPixel(Settings.Instance.GetInt32("rawtree_" + col.Text + "_percent")));
                 }
             }
 
@@ -76,7 +78,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         {
             foreach (ColumnHeader col in Params.Columns)
             {
-                Settings.Instance["rawtree_" + col.Name + "_width"] = col.Width.ToString();
+                Settings.Instance["rawtree_" + col.Text + "_percent"] = Params.GetPercent(col.Width).ToString();
             }
         }
 
@@ -480,7 +482,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 Params.Visible = false;
                 Params.UseFiltering = false;
                 Params.ExpandAll();
-                Params.ModelFilter = TextMatchFilter.Regex(Params, searchfor.ToLower());
+                Params.ModelFilter = TextMatchFilter.Regex(Params, searchfor.Replace("*", ".*").Replace("..*", ".*").ToLower());
                 Params.DefaultRenderer = new HighlightTextRenderer((TextMatchFilter) Params.ModelFilter);
                 Params.UseFiltering = true;
 
@@ -695,8 +697,39 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private void Params_CellClick(object sender, CellClickEventArgs e)
         {
             // Only process the Description column
-            if (e.RowIndex == -1 || startup || e.ColumnIndex != 4)
+            if (e.RowIndex == -1 || startup)
                 return;
+
+            if (e.ColumnIndex == olvColumn2.Index)
+            {
+                var it = ((data)e.Model);
+                var check = it.Value;
+                var name = it.paramname;
+
+                var availableBitMask =
+                    ParameterMetaDataRepository.GetParameterBitMaskInt(name, MainV2.comPort.MAV.cs.firmware.ToString());
+                if (availableBitMask.Count > 0)
+                {
+                    var mcb = new MavlinkCheckBoxBitMask();
+                    var list = new MAVLink.MAVLinkParamList();
+                    list.Add(new MAVLink.MAVLinkParam(name, double.Parse(check.ToString(), CultureInfo.InvariantCulture),
+                        MAVLink.MAV_PARAM_TYPE.INT32));
+                    mcb.setup(name, list);
+                    mcb.ValueChanged += (o, s, value) =>
+                    {
+                        paramCompareForm_dtlvcallback(s, int.Parse(value));
+                            ((data) e.HitTest.RowObject).Value = value;
+                        Params.RefreshItem(e.HitTest.Item);
+                        e.HitTest.SubItem.Text = value;
+                        Params.CancelCellEdit();
+                        e.Handled = true;
+                        mcb.Focus();
+                    };
+                    var frm = mcb.ShowUserControl();
+                    frm.TopMost = true;
+                }
+            }
+
 
             try
             {

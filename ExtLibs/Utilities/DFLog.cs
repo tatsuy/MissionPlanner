@@ -501,6 +501,9 @@ namespace MissionPlanner.Utilities
 
         public int FindMessageOffset(string linetype, string find)
         {
+            if (linetype == null || find == null)
+                return -1;
+
             if (logformat.ContainsKey(linetype.ToUpper()))
                 return FindInArray(logformat[linetype].FieldNames, find);
 
@@ -519,6 +522,25 @@ namespace MissionPlanner.Utilities
                 a++;
             }
             return -1;
+        }
+
+        public long GetLineNoFromTime(CollectionBuffer logdata, DateTime p1)
+        {
+            DateTime last = DateTime.MaxValue;
+
+            foreach (var dfItem in logdata.GetEnumeratorType("GPS"))
+            {
+                // always forwards
+                if (dfItem.time >= p1)
+                    return dfItem.lineno;
+
+                last = dfItem.time;
+            }
+
+            if (last != DateTime.MaxValue)
+                return long.MaxValue;
+
+            return 0;
         }
     }
 }

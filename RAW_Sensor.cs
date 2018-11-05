@@ -275,9 +275,9 @@ namespace MissionPlanner
 
         private void CMB_rawupdaterate_SelectedIndexChanged(object sender, EventArgs e)
         {
-            MainV2.comPort.MAV.cs.ratesensors = (byte) int.Parse(CMB_rawupdaterate.Text);
+            MainV2.comPort.MAV.cs.ratesensors = int.Parse(CMB_rawupdaterate.Text);
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.RAW_SENSORS,
-                (byte) int.Parse(CMB_rawupdaterate.Text)); // request raw sensor
+                int.Parse(CMB_rawupdaterate.Text)); // request raw sensor
         }
 
         System.IO.StreamWriter sw = null;
@@ -288,8 +288,8 @@ namespace MissionPlanner
             {
                 ofd.AddExtension = true;
                 ofd.DefaultExt = ".csv";
-                ofd.ShowDialog();
-                if (ofd.FileName != "")
+                var result = ofd.ShowDialog();
+                if (ofd.FileName != "" && result == DialogResult.OK)
                 {
                     try
                     {

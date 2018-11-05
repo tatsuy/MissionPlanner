@@ -747,6 +747,36 @@ namespace MissionPlanner.Controls
             }
         }
 
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public Color skyColor1
+        {
+            get { return _skyColor1; }
+            set { _skyColor1 = value; }
+        }
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public Color skyColor2
+        {
+            get { return _skyColor2; }
+            set { _skyColor2 = value; }
+        }
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public Color groundColor1
+        {
+            get { return _groundColor1; }
+            set { _groundColor1 = value; }
+        }
+        [System.ComponentModel.Browsable(true), System.ComponentModel.Category("Values")]
+        public Color groundColor2
+        {
+            get { return _groundColor2; }
+            set { _groundColor2 = value; }
+        }
+
+        private Color _skyColor1 = Color.Blue;
+        private Color _skyColor2 = Color.LightBlue;
+        private Color _groundColor1 = Color.FromArgb(0x9b, 0xb8, 0x24);
+        private Color _groundColor2 = Color.FromArgb(0x41, 0x4f, 0x07);
+
         private Color _hudcolor = Color.White;
         private Pen _whitePen = new Pen(Color.White, 2);
         private readonly SolidBrush _whiteBrush = new SolidBrush(Color.White);
@@ -879,7 +909,7 @@ namespace MissionPlanner.Controls
                     log.Debug("Disable");
                     GL.Disable(EnableCap.DepthTest);
                     log.Debug("BlendFunc");
-                    GL.BlendFunc(BlendingFactorSrc.SrcAlpha, BlendingFactorDest.OneMinusSrcAlpha);
+                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
                     log.Debug("Enable");
                     GL.Enable(EnableCap.Blend);
 
@@ -1752,7 +1782,7 @@ namespace MissionPlanner.Controls
                     if (bg.Height != 0)
                     {
                         using (LinearGradientBrush linearBrush = new LinearGradientBrush(
-                            bg, Color.Blue, Color.LightBlue, LinearGradientMode.Vertical))
+                            bg, _skyColor1, _skyColor2, LinearGradientMode.Vertical))
                         {
                             graphicsObject.FillRectangle(linearBrush, bg);
                         }
@@ -1765,7 +1795,7 @@ namespace MissionPlanner.Controls
                     {
                         using (
                             LinearGradientBrush linearBrush = new LinearGradientBrush(
-                                bg, Color.FromArgb(0x9b, 0xb8, 0x24), Color.FromArgb(0x41, 0x4f, 0x07),
+                                bg, _groundColor1, _groundColor2,
                                 LinearGradientMode.Vertical))
                         {
                             graphicsObject.FillRectangle(linearBrush, bg);
@@ -2740,7 +2770,7 @@ namespace MissionPlanner.Controls
         }
 
         // Returns a System.Drawing.Bitmap with the contents of the current framebuffer
-        public new Bitmap GrabScreenshot()
+        public Bitmap GrabScreenshot()
         {
             if (OpenTK.Graphics.GraphicsContext.CurrentContext == null)
                 throw new OpenTK.Graphics.GraphicsContextMissingException();
@@ -2899,7 +2929,7 @@ namespace MissionPlanner.Controls
                     TranslateTransform(-x, -y);
                     */
                     //GL.Enable(EnableCap.Blend);
-                    GL.BlendFunc(BlendingFactorSrc.SrcAlpha, BlendingFactorDest.OneMinusSrcAlpha);
+                    GL.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
                     GL.Enable(EnableCap.Texture2D);
                     GL.BindTexture(TextureTarget.Texture2D, charDict[charid].gltextureid);

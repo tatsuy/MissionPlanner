@@ -10,7 +10,6 @@ using MissionPlanner;
 using System.Collections;
 using System.Linq;
 using System.Runtime.Serialization;
-using DirectShowLib;
 using MissionPlanner.ArduPilot;
 using Newtonsoft.Json;
 
@@ -25,6 +24,10 @@ namespace MissionPlanner
         [JsonIgnore]
         [IgnoreDataMember]
         public MAVState parent;
+
+        [JsonIgnore]
+        [IgnoreDataMember]
+        public static ISpeech Speech;
 
         public int lastautowp = -1;
 
@@ -437,6 +440,46 @@ namespace MissionPlanner
         public float ch15out { get; set; }
         public float ch16out { get; set; }
 
+        public float esc1_volt { get; set; }
+        public float esc1_curr { get; set; }
+        public float esc1_rpm { get; set; }
+        public float esc1_temp { get; set; }
+
+        public float esc2_volt { get; set; }
+        public float esc2_curr { get; set; }
+        public float esc2_rpm { get; set; }
+        public float esc2_temp { get; set; }
+
+        public float esc3_volt { get; set; }
+        public float esc3_curr { get; set; }
+        public float esc3_rpm { get; set; }
+        public float esc3_temp { get; set; }
+
+        public float esc4_volt { get; set; }
+        public float esc4_curr { get; set; }
+        public float esc4_rpm { get; set; }
+        public float esc4_temp { get; set; }
+
+        public float esc5_volt { get; set; }
+        public float esc5_curr { get; set; }
+        public float esc5_rpm { get; set; }
+        public float esc5_temp { get; set; }
+
+        public float esc6_volt { get; set; }
+        public float esc6_curr { get; set; }
+        public float esc6_rpm { get; set; }
+        public float esc6_temp { get; set; }
+
+        public float esc7_volt { get; set; }
+        public float esc7_curr { get; set; }
+        public float esc7_rpm { get; set; }
+        public float esc7_temp { get; set; }
+
+        public float esc8_volt { get; set; }
+        public float esc8_curr { get; set; }
+        public float esc8_rpm { get; set; }
+        public float esc8_temp { get; set; }
+
         public float ch3percent
         {
             get
@@ -619,6 +662,9 @@ namespace MissionPlanner
         public float distTraveled { get; set; }
 
         [DisplayText("Time in Air (sec)")]
+        public float timeSinceArmInAir { get; set; }
+
+        [DisplayText("Time in Air (sec)")]
         public float timeInAir { get; set; }
 
         //Time in Air converted to min.sec format for easier reading
@@ -640,6 +686,13 @@ namespace MissionPlanner
                 if (_groundspeed <= 1) return 0;
                 return (float)((roll* 9.80665)/ groundspeed);
             }
+        }
+
+        //https://en.wikipedia.org/wiki/Load_factor_(aeronautics)
+        [DisplayText("Turn Gs (load)")]
+        public float turng
+        {
+            get { return (float)(1 / Math.Cos(MathHelper.deg2rad * roll)); }
         }
 
         // turn radius
@@ -706,7 +759,7 @@ namespace MissionPlanner
             set { _messagehigh = value; }
         }
 
-        private string _messagehigh;
+        private string _messagehigh = "";
         public DateTime messageHighTime { get; set; }
 
         //battery
@@ -805,6 +858,7 @@ namespace MissionPlanner
             get { return _current2; }
             set
             {
+                if (_lastcurrent2 == DateTime.MinValue) _lastcurrent2 = datetime;
                 if (value < 0) return;              
                 battery_usedmah2 += ((value * 1000.0) * (datetime - _lastcurrent2).TotalHours);
                 _current2 = value;
@@ -835,6 +889,9 @@ namespace MissionPlanner
             get { return _movingbase; }
             set
             {
+                if(value == null)
+                    _movingbase = new PointLatLngAlt();
+
                 if (_movingbase.Lat != value.Lat || _movingbase.Lng != value.Lng || _movingbase.Alt
                     != value.Alt)
                     _movingbase = value;
@@ -1145,6 +1202,8 @@ namespace MissionPlanner
         // pressure
         public float press_abs { get; set; }
         public int press_temp { get; set; }
+        public float press_abs2 { get; set; }
+        public int press_temp2 { get; set; }
 
         // sensor offsets
         public int mag_ofs_x { get; set; }
@@ -1161,17 +1220,17 @@ namespace MissionPlanner
         public float accel_cal_z { get; set; }
 
         // requested stream rates
-        public byte rateattitude { get; set; }
-        public byte rateposition { get; set; }
-        public byte ratestatus { get; set; }
-        public byte ratesensors { get; set; }
-        public byte raterc { get; set; }
+        public int rateattitude { get; set; }
+        public int rateposition { get; set; }
+        public int ratestatus { get; set; }
+        public int ratesensors { get; set; }
+        public int raterc { get; set; }
 
-        public static byte rateattitudebackup;
-        public static byte ratepositionbackup;
-        public static byte ratestatusbackup;
-        public static byte ratesensorsbackup;
-        public static byte ratercbackup;
+        public static int rateattitudebackup;
+        public static int ratepositionbackup;
+        public static int ratestatusbackup;
+        public static int ratesensorsbackup;
+        public static int ratercbackup;
 
         // reference
         public DateTime datetime { get; set; }
@@ -1516,7 +1575,7 @@ namespace MissionPlanner
 
                         if (lastpos.Lat != 0 && lastpos.Lng != 0 && armed)
                         {
-                            if (!mavinterface.BaseStream.IsOpen && !mavinterface.logreadmode)
+                            if ((mavinterface.BaseStream != null && !mavinterface.BaseStream.IsOpen) && !mavinterface.logreadmode)
                                 distTraveled = 0;
 
                             distTraveled += (float) lastpos.GetDistance(new PointLatLngAlt(lat, lng, 0, ""))*
@@ -1529,18 +1588,22 @@ namespace MissionPlanner
                         }
 
                         // throttle is up, or groundspeed is > 3 m/s
-                        if ((ch3percent > 12  || _groundspeed > 3.0) && armed)
+                        if ((ch3percent > 12 || _groundspeed > 3.0) && armed)
+                        {
                             timeInAir++;
+                            timeSinceArmInAir++;
+                        }
 
+                        // to maintain total timeinair for this session not just based on arming
                         if (!armed)
-                            timeInAir = 0;
+                            timeSinceArmInAir = 0;
 
                         if (!gotwind)
                             dowindcalc();
                     }
 
                     // re-request streams
-                    if (!(lastdata.AddSeconds(8) > DateTime.Now) && mavinterface.BaseStream.IsOpen)
+                    if (!(lastdata.AddSeconds(8) > DateTime.Now) && mavinterface.BaseStream != null && mavinterface.BaseStream.IsOpen)
                     {
                         try
                         {
@@ -1586,6 +1649,19 @@ namespace MissionPlanner
                         MAV.clearPacket((uint) MAVLink.MAVLINK_MSG_ID.RC_CHANNELS_SCALED);
                     }
 
+                    mavLinkMessage = MAV.getPacket((uint)MAVLink.MAVLINK_MSG_ID.LOCAL_POSITION_NED);
+
+                    if (mavLinkMessage != null) 
+                    {
+                        var lpned = mavLinkMessage.ToStructure<MAVLink.mavlink_local_position_ned_t>();
+
+                        var loc = HomeLocation.gps_offset(lpned.y, lpned.x);
+
+                        //lat = loc.Lat;
+                        //lng = loc.Lng;
+                        //alt = (float)(loc.Alt + lpned.z);
+                    }
+
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.AUTOPILOT_VERSION);
 
                     if (mavLinkMessage != null)
@@ -1610,6 +1686,15 @@ namespace MissionPlanner
                         {
                             
                         }
+
+                        Serial.print("Flight SW Version: "); Serial.println(version.flight_sw_version);
+                        Serial.print("Middleware SW: "); Serial.println(version.middleware_sw_version);
+                        Serial.print("OS Custom: "); Serial.println(version.os_custom_version);
+                        Serial.print("OS SW: "); Serial.println(version.os_sw_version);
+                        Serial.print("board_version: "); Serial.println(version.board_version);                        
+                        Serial.print("Vendor ID: "); Serial.println(version.vendor_id);
+                        Serial.print("Product ID: "); Serial.println(version.product_id);
+                        Serial.print("Board Version: "); Serial.println(version.board_version);
 
                         MAV.clearPacket((uint)MAVLink.MAVLINK_MSG_ID.AUTOPILOT_VERSION);
                     }
@@ -1837,6 +1922,9 @@ namespace MissionPlanner
                                 {
                                     case MAVLink.EKF_STATUS_FLAGS.EKF_ATTITUDE: // step 1
                                     case MAVLink.EKF_STATUS_FLAGS.EKF_VELOCITY_HORIZ: // with pos
+                                        if (gpsstatus > 0) // we have gps and dont have vel_hoz
+                                            ekfstatus = 1;
+                                        break;
                                     case MAVLink.EKF_STATUS_FLAGS.EKF_VELOCITY_VERT: // with pos
                                     //case MAVLink.EKF_STATUS_FLAGS.EKF_POS_HORIZ_REL: // optical flow
                                     case MAVLink.EKF_STATUS_FLAGS.EKF_POS_HORIZ_ABS: // step 1
@@ -1955,10 +2043,12 @@ namespace MissionPlanner
                                 }
                             }
 
-                            if (oldmode != mode && Speech.speechEnable && parent.parent.MAV.cs == this &&
+                            if (oldmode != mode && Speech != null && Speech.speechEnable &&
+                                parent?.parent?.MAV?.cs == this &&
                                 Settings.Instance.GetBoolean("speechmodeenabled"))
                             {
-                                Speech.Instance.SpeakAsync(Common.speechConversion(parent, ""+ Settings.Instance["speechmode"]));
+                                Speech.SpeakAsync(Common.speechConversion(parent,
+                                    "" + Settings.Instance["speechmode"]));
                             }
                         }
                     }
@@ -2108,6 +2198,14 @@ namespace MissionPlanner
                         var pres = mavLinkMessage.ToStructure<MAVLink.mavlink_scaled_pressure_t>();
                         press_abs = pres.press_abs;
                         press_temp = pres.temperature;
+                    }
+
+                    mavLinkMessage = MAV.getPacket((uint)MAVLink.MAVLINK_MSG_ID.SCALED_PRESSURE2);
+                    if (mavLinkMessage != null)
+                    {
+                        var pres = mavLinkMessage.ToStructure<MAVLink.mavlink_scaled_pressure2_t>();
+                        press_abs2 = pres.press_abs;
+                        press_temp2 = pres.temperature;
                     }
 
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.TERRAIN_REPORT);
@@ -2293,10 +2391,10 @@ namespace MissionPlanner
                             lastautowp = (int) wpno;
                         }
 
-                        if (oldwp != wpno && Speech.speechEnable && parent.parent.MAV.cs == this &&
+                        if (oldwp != wpno && Speech != null && Speech.speechEnable && parent.parent.MAV.cs == this &&
                             Settings.Instance.GetBoolean("speechwaypointenabled"))
                         {
-                            Speech.Instance.SpeakAsync(Common.speechConversion(parent, "" + Settings.Instance["speechwaypoint"]));
+                            Speech.SpeakAsync(Common.speechConversion(parent, "" + Settings.Instance["speechwaypoint"]));
                         }
 
                         //MAVLink.packets[(byte)MAVLink.MSG_NAMES.WAYPOINT_CURRENT);
@@ -2379,6 +2477,56 @@ namespace MissionPlanner
                         rxrssi = (int) ((rcin.rssi/255.0)*100.0);
 
                         //MAVLink.packets[(byte)MAVLink.MSG_NAMES.RC_CHANNELS_RAW);
+                    }
+
+                    mavLinkMessage = MAV.getPacket((uint)MAVLink.MAVLINK_MSG_ID.ESC_TELEMETRY_1_TO_4);
+                    if (mavLinkMessage != null)
+                    {
+                        var esc = mavLinkMessage.ToStructure<MAVLink.mavlink_esc_telemetry_1_to_4_t>();
+                        esc1_volt = esc.voltage[0] / 100.0f;
+                        esc1_curr = esc.current[0] / 100.0f;
+                        esc1_rpm = esc.rpm[0];
+                        esc1_temp = esc.temperature[0];
+
+                        esc2_volt = esc.voltage[1] / 100.0f;
+                        esc2_curr = esc.current[1] / 100.0f;
+                        esc2_rpm = esc.rpm[1];
+                        esc2_temp = esc.temperature[1];
+
+                        esc3_volt = esc.voltage[2] / 100.0f;
+                        esc3_curr = esc.current[2] / 100.0f;
+                        esc3_rpm = esc.rpm[2];
+                        esc3_temp = esc.temperature[2];
+
+                        esc4_volt = esc.voltage[3] / 100.0f;
+                        esc4_curr = esc.current[3] / 100.0f;
+                        esc4_rpm = esc.rpm[3];
+                        esc4_temp = esc.temperature[3];
+                    }
+
+                    mavLinkMessage = MAV.getPacket((uint)MAVLink.MAVLINK_MSG_ID.ESC_TELEMETRY_5_TO_8);
+                    if (mavLinkMessage != null)
+                    {
+                        var esc = mavLinkMessage.ToStructure<MAVLink.mavlink_esc_telemetry_5_to_8_t>();
+                        esc5_volt = esc.voltage[0] / 100.0f;
+                        esc5_curr = esc.current[0] / 100.0f;
+                        esc5_rpm = esc.rpm[0];
+                        esc5_temp = esc.temperature[0];
+
+                        esc6_volt = esc.voltage[1] / 100.0f;
+                        esc6_curr = esc.current[1] / 100.0f;
+                        esc6_rpm = esc.rpm[1];
+                        esc6_temp = esc.temperature[1];
+
+                        esc7_volt = esc.voltage[2] / 100.0f;
+                        esc7_curr = esc.current[2] / 100.0f;
+                        esc7_rpm = esc.rpm[2];
+                        esc7_temp = esc.temperature[2];
+
+                        esc8_volt = esc.voltage[3] / 100.0f;
+                        esc8_curr = esc.current[3] / 100.0f;
+                        esc8_rpm = esc.rpm[3];
+                        esc8_temp = esc.temperature[3];
                     }
 
                     mavLinkMessage = MAV.getPacket((uint) MAVLink.MAVLINK_MSG_ID.SERVO_OUTPUT_RAW);

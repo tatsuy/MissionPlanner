@@ -13,7 +13,6 @@ using System.Windows.Forms;
 using Microsoft.Scripting.Utils;
 using MissionPlanner.Mavlink;
 using MissionPlanner.Utilities;
-using ProtoBuf.Meta;
 
 namespace MissionPlanner.Controls
 {
@@ -126,6 +125,18 @@ namespace MissionPlanner.Controls
                     }
 
                     object value = field.GetValue(mavLinkMessage.data);
+
+                    if (field.Name == "time_unix_usec")
+                    {
+                        DateTime date1 = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+                        try
+                        {
+                            value = date1.AddMilliseconds((ulong)value / 1000);
+                        }
+                        catch
+                        {
+                        }
+                    }
 
                     if (field.FieldType.IsArray)
                     {

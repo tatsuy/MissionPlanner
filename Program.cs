@@ -27,6 +27,7 @@ namespace MissionPlanner
         public static bool WindowsStoreApp { get { return Application.ExecutablePath.Contains("WindowsApps"); } }
 
         public static Image Logo = null;
+        public static Image Logo2 = null;
         public static Image IconFile = null;
 
         public static Splash Splash;
@@ -68,7 +69,6 @@ namespace MissionPlanner
             System.Windows.Forms.Application.EnableVisualStyles();
             XmlConfigurator.Configure();
             log.Info("******************* Logging Configured *******************");
-            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
             ServicePointManager.DefaultConnectionLimit = 10;
 
@@ -99,6 +99,9 @@ namespace MissionPlanner
 
             if (File.Exists(Settings.GetRunningDirectory() + "logo.png"))
                 Logo = new Bitmap(Settings.GetRunningDirectory() + "logo.png");
+
+            if (File.Exists(Settings.GetRunningDirectory() + "logo2.png"))
+                Logo2 = new Bitmap(Settings.GetRunningDirectory() + "logo2.png");
 
             if (File.Exists(Settings.GetRunningDirectory() + "icon.png"))
             {
@@ -162,6 +165,16 @@ namespace MissionPlanner
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Eniro_Topo.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapBox.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapboxNoFly.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Lake.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1974.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1979.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1984.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1988.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Relief.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Slopezone.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Sea.Instance);
+
             // optionally add gdal support
             if (Directory.Exists(Application.StartupPath + Path.DirectorySeparatorChar + "gdal"))
                 GMap.NET.MapProviders.GMapProviders.List.Add(GDAL.GDALProvider.Instance);
@@ -190,6 +203,8 @@ namespace MissionPlanner
 
             CleanupFiles();
 
+            //LoadDlls();
+
             log.InfoFormat("64bit os {0}, 64bit process {1}", System.Environment.Is64BitOperatingSystem,
                 System.Environment.Is64BitProcess);
 
@@ -202,7 +217,7 @@ namespace MissionPlanner
             Device.DeviceStructure test5 = new Device.DeviceStructure(466441);
             Device.DeviceStructure test6 = new Device.DeviceStructure(131874);
             Device.DeviceStructure test7 = new Device.DeviceStructure(263178);
-            // 
+            //
             Device.DeviceStructure test8 = new Device.DeviceStructure(1442082);
             Device.DeviceStructure test9 = new Device.DeviceStructure(1114914);
             Device.DeviceStructure test10 = new Device.DeviceStructure(1442826);
@@ -258,6 +273,24 @@ namespace MissionPlanner
             }
         }
 
+        private static void LoadDlls()
+        {
+            var dlls = Directory.GetFiles(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "*.dll");
+
+            foreach (var dll in dlls)
+            {
+                try
+                {
+                    log.Debug("Load: "+dll);
+                    Assembly.LoadFile(dll);
+                }
+                catch (Exception ex)
+                {
+                    log.Debug(ex);
+                }
+            }
+        }
+
         private static void CurrentDomain_FirstChanceException(object sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
         {
             log.Debug("FirstChanceException in: " + e.Exception.Source, e.Exception);
@@ -310,8 +343,23 @@ namespace MissionPlanner
             }
             catch
             {
-                
+
             }
+
+            try
+            {
+                var file = "px4uploader.exe";
+                var file1 = "px4uploader.dll";
+                if (File.Exists(file1) && File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+            catch
+            {
+
+            }
+
             try
             {
                 foreach (string newupdater in Directory.GetFiles(Settings.GetRunningDirectory(), "Updater.exe*.new"))
@@ -481,7 +529,7 @@ namespace MissionPlanner
                     {
                     }
 
-                    // Create a request using a URL that can receive a post. 
+                    // Create a request using a URL that can receive a post.
                     WebRequest request = WebRequest.Create("http://vps.oborne.me/mail.php");
                     request.Timeout = 10000; // 10 sec
                     // Set the Method property of the request to POST.

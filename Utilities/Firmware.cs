@@ -77,6 +77,7 @@ namespace MissionPlanner.Utilities
             public string urlfmuv2 = "";
             public string urlfmuv3 = "";
             public string urlfmuv4 = "";
+            public string urlfmuv5 = "";
             public string urlrevomini = "";
             public string urlmindpxv2 = "";
 
@@ -414,6 +415,10 @@ namespace MissionPlanner.Utilities
                     baseurl = temp.urlpx4v4.ToString();
                     baseurl = CheckChibiOS(baseurl, temp.urlfmuv4);
                 }
+                else if (board == BoardDetect.boards.fmuv5)
+                {
+                    baseurl = temp.urlfmuv5;
+                }
                 else if (board == BoardDetect.boards.px4v4pro)
                 {
                     baseurl = temp.urlpx4v4pro.ToString();
@@ -469,6 +474,16 @@ namespace MissionPlanner.Utilities
                 else if (board == BoardDetect.boards.mindpxv2)
                 {
                     baseurl = temp.urlmindpxv2.ToString();
+                }
+                else if (board == BoardDetect.boards.chbootloader)
+                {
+                    baseurl = temp.urlfmuv2.Replace("fmuv2", BoardDetect.chbootloader);
+
+                    if (String.IsNullOrEmpty(baseurl) || !Download.CheckHTTPFileExists(baseurl))
+                    {
+                        CustomMessageBox.Show(Strings.No_firmware_available_for_this_board);
+                        return false;
+                    }
                 }
                 else
                 {
@@ -573,9 +588,16 @@ namespace MissionPlanner.Utilities
 
         private string CheckChibiOS(string existingfw, string chibiosurl)
         {
-            if (String.IsNullOrEmpty(chibiosurl) || !Download.CheckHTTPFileExists(chibiosurl))
+            try
             {
-                return existingfw;
+                if (String.IsNullOrEmpty(chibiosurl) || !Download.CheckHTTPFileExists(chibiosurl))
+                {
+                    return existingfw;
+                }
+            }
+            catch (UriFormatException)
+            {
+
             }
 
             if (CustomMessageBox.Show("Upload ChibiOS", "ChibiOS", MessageBoxButtons.YesNo) == (int)DialogResult.Yes)
@@ -1187,7 +1209,6 @@ namespace MissionPlanner.Utilities
         }
 
         string _message = "";
-        private RootObject firmwares;
 
         void up_LogEvent(string message, int level = 0)
         {
@@ -1213,7 +1234,9 @@ namespace MissionPlanner.Utilities
         {
             if (board == BoardDetect.boards.px4 || board == BoardDetect.boards.px4v2 ||
                 board == BoardDetect.boards.px4v3 || board == BoardDetect.boards.px4v4 ||
-                board == BoardDetect.boards.px4v4pro)
+                board == BoardDetect.boards.px4v4pro || board == BoardDetect.boards.fmuv5 ||
+                board == BoardDetect.boards.revomini || board == BoardDetect.boards.mindpxv2 ||
+                board == BoardDetect.boards.minipix || board == BoardDetect.boards.chbootloader)
             {
                 try
                 {

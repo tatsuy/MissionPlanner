@@ -431,10 +431,10 @@ namespace MissionPlanner
             float maxz = 0;
 
             // backup current rate and set
-            byte backupratesens = MainV2.comPort.MAV.cs.ratesensors;
+            var backupratesens = MainV2.comPort.MAV.cs.ratesensors;
 
-            byte backuprateatt = MainV2.comPort.MAV.cs.rateattitude;
-            byte backupratepos = MainV2.comPort.MAV.cs.rateposition;
+            var backuprateatt = MainV2.comPort.MAV.cs.rateattitude;
+            var backupratepos = MainV2.comPort.MAV.cs.rateposition;
 
             MainV2.comPort.MAV.cs.ratesensors = 2;
             MainV2.comPort.MAV.cs.rateattitude = 0;
@@ -1165,8 +1165,6 @@ namespace MissionPlanner
         static double[] doLSQ(List<Tuple<float, float, float>> data, Action<double[], double[], object> fitalgo,
             double[] x)
         {
-            double epsg = 0.0001;
-            double epsf = 0;
             double epsx = 0;
             int maxits = 100;
 
@@ -1174,7 +1172,7 @@ namespace MissionPlanner
             alglib.minlmreport rep;
 
             alglib.minlmcreatev(data.Count, x, 0.1, out state);
-            alglib.minlmsetcond(state, epsg, epsf, epsx, maxits);
+            alglib.minlmsetcond(state, epsx, maxits);
 
             var t1 = new alglib.ndimensional_fvec(fitalgo);
 

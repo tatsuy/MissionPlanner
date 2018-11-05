@@ -1,27 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.Reflection;
-using System.Text;
 using System.Windows.Forms;
-using System.IO.Ports;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
-using KMLib;
-using KMLib.Feature;
-using KMLib.Geometry;
-using Core.Geometry;
-using ICSharpCode.SharpZipLib.Zip;
-using ICSharpCode.SharpZipLib.Checksums;
-using ICSharpCode.SharpZipLib.Core;
 using log4net;
-using MissionPlanner.Comms;
 using MissionPlanner.Utilities;
 using System.Diagnostics;
-using System.Threading;
 
 namespace MissionPlanner.Log
 {
@@ -64,6 +50,9 @@ namespace MissionPlanner.Log
         private void Log_Load(object sender, EventArgs e)
         {
             LoadLogList();
+
+            if (MainV2.comPort.MAV.cs.armed)
+                CustomMessageBox.Show("Please disarm the drone before downloading logs!", Strings.ERROR);
         }
 
         void LoadLogList()
@@ -211,12 +200,6 @@ namespace MissionPlanner.Log
 
             status = SerialStatus.Reading;
 
-            // used for log fn
-            MAVLink.MAVLinkMessage hbpacket = MainV2.comPort.getHeartBeat();
-
-            if (hbpacket != null)
-                log.Info("Got hbpacket length: " + hbpacket.Length);
-
             // get df log from mav
             using (var ms = MainV2.comPort.GetLog(no))
             {
@@ -227,11 +210,9 @@ namespace MissionPlanner.Log
 
                 status = SerialStatus.Done;
 
-                MAVLink.mavlink_heartbeat_t hb = (MAVLink.mavlink_heartbeat_t)MainV2.comPort.DebugPacket(hbpacket);
-
                 logfile = Settings.Instance.LogDir + Path.DirectorySeparatorChar
                           + MainV2.comPort.MAV.aptype.ToString() + Path.DirectorySeparatorChar
-                          + hbpacket.sysid + Path.DirectorySeparatorChar + no + " " + MakeValidFileName(fileName) + ".bin";
+                          + MainV2.comPort.MAV.sysid + Path.DirectorySeparatorChar + no + " " + MakeValidFileName(fileName) + ".bin";
 
                 // make log dir
                 Directory.CreateDirectory(Path.GetDirectoryName(logfile));
@@ -267,7 +248,7 @@ namespace MissionPlanner.Log
             {
                 string newlogfilename = Settings.Instance.LogDir + Path.DirectorySeparatorChar
                                         + MainV2.comPort.MAV.aptype.ToString() + Path.DirectorySeparatorChar
-                                        + hbpacket.sysid + Path.DirectorySeparatorChar +
+                                        + MainV2.comPort.MAV.sysid + Path.DirectorySeparatorChar +
                                         logtime.ToString("yyyy-MM-dd HH-mm-ss") + ".log";
                 try
                 {
