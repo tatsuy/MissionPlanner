@@ -1,14 +1,7 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using MissionPlanner.Comms;
 using System.Globalization;
-using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System.IO;
 using System.Net.Sockets;
@@ -64,7 +57,6 @@ namespace MissionPlanner
                 threadrun = false;
                 comPort.Close();
                 BUT_connect.Text = Strings.Connect;
-                MainV2.comPort.MAV.cs.MovingBase = null;
             }
             else
             {
@@ -175,7 +167,7 @@ namespace MissionPlanner
                     {
                         string[] items = line.Trim().Split(',', '*');
 
-                        if (items[15] != GetChecksum(line.Trim()))
+                        if (items[items.Length-1] != GetChecksum(line.Trim()))
                         {
                             Console.WriteLine("Bad Nmea line " + items[15] + " vs " + GetChecksum(line.Trim()));
                             continue;
@@ -207,8 +199,7 @@ namespace MissionPlanner
                     }
 
 
-                    if (DateTime.Now > nextsend && gotolocation.Lat != 0 && gotolocation.Lng != 0 &&
-                        gotolocation.Alt != 0) // 200 * 10 = 2 sec /// lastgotolocation != gotolocation && 
+                    if (DateTime.Now > nextsend && gotolocation.Lat != 0 && gotolocation.Lng != 0) // 200 * 10 = 2 sec /// lastgotolocation != gotolocation && 
                     {
                         nextsend = DateTime.Now.AddMilliseconds(1000/updaterate);
                         Console.WriteLine("new home wp " + DateTime.Now.ToString("h:MM:ss") + " " + gotolocation.Lat +

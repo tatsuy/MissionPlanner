@@ -252,8 +252,13 @@ namespace MissionPlanner.Log
                             var offset = dflog.FindMessageOffset(key, value);
                             if (offset == -1)
                                 continue;
-                            work[a] = double.Parse(item.items[offset]);
+                            var ans = logdata.GetUnit(key, value);
+                            string unit = ans.Item1;
+                            double multiplier = ans.Item2;
+                            work[a] = double.Parse(item.items[offset]) * multiplier;
                         }
+
+
 
                         double workanswer = 0;
                         foreach (var value in work.Values)
@@ -261,6 +266,33 @@ namespace MissionPlanner.Log
                             workanswer += Math.Pow(value, 2);
                         }
                         answer.Add(item, Math.Sqrt(workanswer));
+                    }
+                }
+            }
+            else if (expression.Contains("*")) // ATT.DesRoll*ATT.Roll
+            {
+                var matchs = Regex.Matches(expression, @"([A-z0-9_]+)\.([A-z0-9_]+)\*([A-z0-9_]+)\.([A-z0-9_]+)");
+
+                if (matchs.Count > 0)
+                {
+                    var type = matchs[0].Groups[1].Value.ToString();
+                    var field = matchs[0].Groups[2].Value.ToString();
+
+                    var type2 = matchs[0].Groups[3].Value.ToString();
+                    var field2 = matchs[0].Groups[4].Value.ToString();
+
+                    foreach (var item in logdata.GetEnumeratorType(new[] { type, type2 }))
+                    {
+                        if (type == type2)
+                        {
+                            var idx1 = dflog.FindMessageOffset(type, field);
+                            var idx2 = dflog.FindMessageOffset(type2, field2);
+                            if (idx1 == -1 || idx2 == -1)
+                                break;
+                            answer.Add(item,
+                                double.Parse(item.items[idx1]) *
+                                double.Parse(item.items[idx2]));
+                        }
                     }
                 }
             }

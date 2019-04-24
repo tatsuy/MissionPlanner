@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,12 +32,12 @@ namespace MissionPlanner.Utilities
 
         string firmwareurl = "https://raw.github.com/diydrones/binary/master/Firmware/firmware2.xml";
 
-        readonly string gholdurl = ("https://github.com/diydrones/binary/raw/!Hash!/Firmware/firmware2.xml");
-        readonly string gholdfirmwareurl = ("https://github.com/diydrones/binary/raw/!Hash!/Firmware/!Firmware!");
+        static readonly string gholdurl = ("https://github.com/diydrones/binary/raw/!Hash!/Firmware/firmware2.xml");
+        static readonly string gholdfirmwareurl = ("https://github.com/diydrones/binary/raw/!Hash!/Firmware/!Firmware!");
 
-        string[] gholdurls = new string[] {};
+        static string[] gholdurls = new string[] {};
 
-        public List<KeyValuePair<string, string>> niceNames = new List<KeyValuePair<string, string>>();
+        public static List<KeyValuePair<string, string>> niceNames = new List<KeyValuePair<string, string>>();
 
         private optionsObject options = new optionsObject();
 
@@ -57,6 +58,7 @@ namespace MissionPlanner.Utilities
             [XmlElement(ElementName = "url2560-2")]
             public string url2560_2 = "";
             public string urlpx4v1 = "";
+            public string urlpx4rl = "";
             public string urlpx4v2 = "";
             public string urlpx4v3 = "";
             public string urlpx4v4 = "";
@@ -84,6 +86,11 @@ namespace MissionPlanner.Utilities
             public string name = "";
             public string desc = "";
             public int k_format_version;
+
+            public override string ToString()
+            {
+                return this.ToJSON();
+            }
         }
 
         public class FirmwareInfo
@@ -117,7 +124,7 @@ namespace MissionPlanner.Utilities
             public string format_version { get; set; }
         }
 
-        public string getUrl(string hash, string filename)
+        public static string getUrl(string hash, string filename)
         {
             if (hash.ToLower().StartsWith("http"))
             {
@@ -143,11 +150,7 @@ namespace MissionPlanner.Utilities
             return "";
         }
 
-
-        /// <summary>
-        /// Load firmware history from file
-        /// </summary>
-        public Firmware()
+        static Firmware()
         {
             string file = Path.GetDirectoryName(Path.GetFullPath(Assembly.GetExecutingAssembly().Location)) + Path.DirectorySeparatorChar +
                           "FirmwareHistory.txt";
@@ -187,10 +190,32 @@ namespace MissionPlanner.Utilities
                     a++;
                 }
             }
+        }
 
-            //firmwares = JsonConvert.DeserializeObject<RootObject>(new WebClient().DownloadString("http://firmware.ardupilot.org/manifest.json"));
+        /// <summary>
+        /// Load firmware history from file
+        /// </summary>
+        public Firmware()
+        {
+            /*
+            var firmwares = JsonConvert.DeserializeObject<RootObject>(new WebClient().DownloadString("http://firmware.ardupilot.org/manifest.json"));
 
-            System.Threading.Thread.CurrentThread.CurrentUICulture = L10N.ConfigLang;
+            var allnonDEV = firmwares.firmware.Where(a => a.mav_firmware_version_type == "OFFICIAL");
+
+            var distinctplatforms = allnonDEV.GroupBy(a => a.platform).Select(group => group.First());
+
+            allnonDEV.OrderBy((info => info.mav_type+"-"+info.platform)).Select(a =>
+            {
+                File.AppendAllText("fwlist.txt",
+                    String.Format("{0},{1},{2},{3},{4},{5}\r\n", a.mav_type, a.url, a.platform, a.mav_firmware_version, a.git_sha, a.latest));
+
+                File.AppendAllText("fwlist1.txt",
+                    String.Format("    <url{0}>{1}</url{0}>\r\n", a.platform, a.url));
+                return false;
+            }).ToArray();
+
+            //var type = allnonDEV.GroupBy(a=> a.)
+            */
         }
 
         /// <summary>
@@ -290,7 +315,9 @@ namespace MissionPlanner.Utilities
         void updateProgress(int percent, string status)
         {
             if (Progress != null)
+            {
                 Progress(percent, status);
+            }
         }
 
         /// <summary>
@@ -306,7 +333,13 @@ namespace MissionPlanner.Utilities
             {
                 software temp = (software) tempin;
 
-                string baseurl = temp.urlpx4v2;
+                string baseurl = temp.urlfmuv3;
+                string baseurl2 = temp.urlpx4v2;
+
+                if (!Download.CheckHTTPFileExists(baseurl))
+                {
+                    baseurl = baseurl2;
+                }
 
                 if (baseurl == "" || !baseurl.ToLower().StartsWith("http")) return;
 
@@ -395,6 +428,10 @@ namespace MissionPlanner.Utilities
                 {
                     baseurl = temp.urlpx4v1.ToString();
                 }
+                else if (board == BoardDetect.boards.px4rl)
+                {
+                    baseurl = temp.urlpx4rl.ToString();
+                }
                 else if (board == BoardDetect.boards.px4v2)
                 {
                     baseurl = temp.urlpx4v2.ToString();
@@ -403,6 +440,7 @@ namespace MissionPlanner.Utilities
                 else if (board == BoardDetect.boards.px4v3)
                 {
                     baseurl = temp.urlpx4v3.ToString();
+
                     if (String.IsNullOrEmpty(baseurl) || !Download.CheckHTTPFileExists(baseurl))
                     {
                         baseurl = temp.urlpx4v2.ToString();
@@ -726,16 +764,41 @@ namespace MissionPlanner.Utilities
         private void AttemptRebootToBootloader()
         {
             string[] allports = SerialPort.GetPortNames();
-
+            
+            List<Task<bool>> tasklist = new List<Task<bool>>();
+            // check if its in BL mode already
             foreach (string port in allports)
             {
                 log.Info(DateTime.Now.Millisecond + " Trying Port " + port);
                 try
                 {
-                    using (var up = new Uploader(port, 115200))
-                    {
-                        up.identify();
+                    var task = Task.Run(() => {
+                        using (var up = new Uploader(port, 115200))
+                        {
+                            up.identify();
+                            return true;
+                        }
+
+                        return false;
+                    });
+
+                    tasklist.Add(task);
+                }
+                catch (Exception ex)
+                {
+                    log.Error(ex);
+                }
+            }
+
+            foreach (var task in tasklist)
+            {
+                try
+                {
+                    if (task.Wait(TimeSpan.FromSeconds(3)) && task.Result == true)
                         return;
+                    else
+                    {
+                        //not there
                     }
                 }
                 catch (Exception ex)
@@ -749,20 +812,29 @@ namespace MissionPlanner.Utilities
                 try
                 {
                     updateProgress(-1, "Look for HeartBeat");
-                    // check if we are seeing heartbeats
-                    MainV2.comPort.BaseStream.Open();
-                    MainV2.comPort.giveComport = true;
+                    var task = Task.Run(() =>
+                    {
+                        // check if we are seeing heartbeats
+                        MainV2.comPort.BaseStream.Open();
+                        MainV2.comPort.giveComport = true;
 
-                    if (MainV2.comPort.getHeartBeat().Length > 0)
+                        if (MainV2.comPort.getHeartBeat().Length > 0)
+                        {
+                            MainV2.comPort.doReboot(true, false);
+                            MainV2.comPort.Close();
+                        }
+                        else
+                        {
+                            MainV2.comPort.BaseStream.Close();
+                            throw new Exception("No HeartBeat found");
+                        }
+                    });
+                    if (task.Wait(TimeSpan.FromSeconds(3)))
                     {
                         updateProgress(-1, "Reboot to Bootloader");
-                        MainV2.comPort.doReboot(true, false);
-                        MainV2.comPort.Close();
                     }
                     else
                     {
-                        updateProgress(-1, "No HeartBeat found");
-                        MainV2.comPort.BaseStream.Close();
                         CustomMessageBox.Show(Strings.PleaseUnplugTheBoardAnd);
                     }
                 }
@@ -1273,7 +1345,15 @@ namespace MissionPlanner.Utilities
 
         private bool UploadSolo(string filename, BoardDetect.boards board)
         {
-            Solo.flash_px4(filename);
+            try
+            {
+                Solo.flash_px4(filename);
+            }
+            catch (SocketException)
+            {
+                CustomMessageBox.Show(Strings.ErrorUploadingFirmware + " for SOLO", Strings.ERROR);
+                return false;
+            }
 
             return true;
         }
@@ -1315,9 +1395,6 @@ namespace MissionPlanner.Utilities
                     BaudRate = 115200
                 };
             }
-            port.DataBits = 8;
-            port.StopBits = System.IO.Ports.StopBits.One;
-            port.Parity = System.IO.Ports.Parity.None;
             port.DtrEnable = true;
 
             try

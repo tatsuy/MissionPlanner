@@ -2,7 +2,6 @@
 using System.Collections;
 using System.ComponentModel;
 using System.Drawing;
-using System.Globalization;
 using System.Text;
 using System.Windows.Forms;
 using MissionPlanner.ArduPilot;
@@ -230,6 +229,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                             }
                             return;
                         }
+
+                    if (MainV2.comPort.BaseStream == null || !MainV2.comPort.BaseStream.IsOpen)
+                    {
+                        CustomMessageBox.Show("Your are not connected", Strings.ERROR);
+                        return;
+                    }
 
                     MainV2.comPort.setParam(value, (float)changes[value]);
 

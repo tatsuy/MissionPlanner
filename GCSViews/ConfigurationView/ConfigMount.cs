@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -424,6 +423,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 1,
             RC13 = 1,
             RC14 = 1,
+            SERVO1 = 1,
+            SERVO2 = 1,
+            SERVO3 = 1,
+            SERVO4 = 1,
             SERVO5 = 1,
             SERVO6 = 1,
             SERVO7 = 1,
@@ -450,6 +453,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 1,
             RC13 = 1,
             RC14 = 1,
+            SERVO1 = 1,
+            SERVO2 = 1,
+            SERVO3 = 1,
+            SERVO4 = 1,
             SERVO5 = 1,
             SERVO6 = 1,
             SERVO7 = 1,
@@ -475,6 +482,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 12,
             RC13 = 13,
             RC14 = 14,
+            SERVO1 = 1,
+            SERVO2 = 2,
+            SERVO3 = 3,
+            SERVO4 = 4,
             SERVO5 = 5,
             SERVO6 = 6,
             SERVO7 = 7,
