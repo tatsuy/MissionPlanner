@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Net;
 using System.IO;
@@ -8,14 +7,13 @@ using System.Threading;
 using log4net;
 using log4net.Config;
 using System.Diagnostics;
-using System.Linq;
-using MissionPlanner.Utilities;
-using MissionPlanner;
 using System.Drawing;
+using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
+using GMap.NET.MapProviders;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
+using MissionPlanner.Utilities;
 
 namespace MissionPlanner
 {
@@ -30,6 +28,7 @@ namespace MissionPlanner
         public static bool WindowsStoreApp { get { return Application.ExecutablePath.Contains("WindowsApps"); } }
 
         public static Image Logo = null;
+        public static Image Logo2 = null;
         public static Image IconFile = null;
 
         public static Splash Splash;
@@ -42,16 +41,56 @@ namespace MissionPlanner
         public static string[] names = new string[] { "VVVVZ" };
         public static bool MONO = false;
 
+        static Program()
+        {
+            AppDomain.CurrentDomain.AssemblyLoad += CurrentDomain_AssemblyLoad;
+
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
+            AppDomain.CurrentDomain.TypeResolve += CurrentDomain_TypeResolve;
+
+            AppDomain.CurrentDomain.FirstChanceException += CurrentDomain_FirstChanceException;
+
+            //AppDomain.CurrentDomain.AssemblyResolve += Resolver;
+        }
+
         /// <summary>
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
         public static void Main(string[] args)
         {
+            Start(args);
+        }
+
+        private static void getBrushs()
+        {
+            var brushes = typeof(Brushes).GetProperties();
+            var template = "public static Brush {0} {{get;}} = new SolidBrush() {{ nativeBrush = new SKPaint() {{ Color = new SKColor(0x{1})}} }};";
+            foreach (var brush in brushes)
+            {
+                Console.WriteLine(template, brush.Name, (brush.GetValue(null) as SolidBrush).Color.ToArgb().ToString("X8"));
+            }
+
+             brushes = typeof(SystemBrushes).GetProperties();
+            foreach (var brush in brushes)
+            {
+                Console.WriteLine(template, brush.Name, (brush.GetValue(null) as SolidBrush).Color.ToArgb().ToString("X8"));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void Start(string[] args)
+        { 
             Program.args = args;
             Console.WriteLine(
                 "If your error is about Microsoft.DirectX.DirectInput, please install the latest directx redist from here http://www.microsoft.com/en-us/download/details.aspx?id=35 \n\n");
             Console.WriteLine("Debug under mono    MONO_LOG_LEVEL=debug mono MissionPlanner.exe");
+
+            Console.WriteLine("Data Dir "+Settings.GetDataDirectory());
+            Console.WriteLine("Log Dir "+Settings.GetDefaultLogDir());
+            Console.WriteLine("Running Dir "+Settings.GetRunningDirectory());
+            Console.WriteLine("User Data Dir "+Settings.GetUserDataDirectory());
 
             var t = Type.GetType("Mono.Runtime");
             MONO = (t != null);
@@ -61,14 +100,10 @@ namespace MissionPlanner
             System.Windows.Forms.Application.EnableVisualStyles();
             XmlConfigurator.Configure();
             log.Info("******************* Logging Configured *******************");
-            System.Windows.Forms.Application.SetCompatibleTextRenderingDefault(false);
 
             ServicePointManager.DefaultConnectionLimit = 10;
 
             System.Windows.Forms.Application.ThreadException += Application_ThreadException;
-
-            AppDomain.CurrentDomain.UnhandledException +=
-                new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
             // fix ssl on mono
             ServicePointManager.ServerCertificateValidationCallback =
@@ -96,6 +131,9 @@ namespace MissionPlanner
             if (File.Exists(Settings.GetRunningDirectory() + "logo.png"))
                 Logo = new Bitmap(Settings.GetRunningDirectory() + "logo.png");
 
+            if (File.Exists(Settings.GetRunningDirectory() + "logo2.png"))
+                Logo2 = new Bitmap(Settings.GetRunningDirectory() + "logo2.png");
+
             if (File.Exists(Settings.GetRunningDirectory() + "icon.png"))
             {
                 // 128*128
@@ -120,15 +158,25 @@ namespace MissionPlanner
             if (IconFile != null)
                 Splash.Icon = Icon.FromHandle(((Bitmap)IconFile).GetHicon());
 
-            string strVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+            string strVersion = File.Exists("version.txt")
+                ? File.ReadAllText("version.txt")
+                : System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
             Splash.Text = name + " " + Application.ProductVersion + " build " + strVersion;
             Splash.Show();
 
+            if (Debugger.IsAttached)
+                Splash.TopMost = false;
+
             Application.DoEvents();
             Application.DoEvents();
 
+            CustomMessageBox.ShowEvent += (text, caption, buttons, icon) =>
+            {
+                return (CustomMessageBox.DialogResult)(int)MsgBox.CustomMessageBox.Show(text, caption, (MessageBoxButtons)(int)buttons, (MessageBoxIcon)(int)icon);
+            };
+
             // setup theme provider
-            CustomMessageBox.ApplyTheme += MissionPlanner.Utilities.ThemeManager.ApplyThemeTo;
+            MsgBox.CustomMessageBox.ApplyTheme += MissionPlanner.Utilities.ThemeManager.ApplyThemeTo;
             Controls.MainSwitcher.ApplyTheme += MissionPlanner.Utilities.ThemeManager.ApplyThemeTo;
             MissionPlanner.Controls.InputBox.ApplyTheme += MissionPlanner.Utilities.ThemeManager.ApplyThemeTo;
             Controls.BackstageView.BackstageViewPage.ApplyTheme += MissionPlanner.Utilities.ThemeManager.ApplyThemeTo;
@@ -148,8 +196,21 @@ namespace MissionPlanner
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Custom.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Earthbuilder.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Statkart_Topo2.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Eniro_Topo.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapBox.Instance);
             GMap.NET.MapProviders.GMapProviders.List.Add(Maps.MapboxNoFly.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Lake.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1974.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1979.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1984.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_1988.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Relief.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Slopezone.Instance);
+            GMap.NET.MapProviders.GMapProviders.List.Add(Maps.Japan_Sea.Instance);
+
+            GoogleMapProvider.APIKey = "AIzaSyA5nFp39fEHruCezXnG3r8rGyZtuAkmCug";
+
             // optionally add gdal support
             if (Directory.Exists(Application.StartupPath + Path.DirectorySeparatorChar + "gdal"))
                 GMap.NET.MapProviders.GMapProviders.List.Add(GDAL.GDALProvider.Instance);
@@ -157,6 +218,10 @@ namespace MissionPlanner
             // add proxy settings
             GMap.NET.MapProviders.GMapProvider.WebProxy = WebRequest.GetSystemWebProxy();
             GMap.NET.MapProviders.GMapProvider.WebProxy.Credentials = CredentialCache.DefaultCredentials;
+
+            // generic status report screen
+            MAVLinkInterface.CreateIProgressReporterDialogue += title =>
+                new ProgressReporterDialogue() { StartPosition = FormStartPosition.CenterScreen, Text = title };
 
             WebRequest.DefaultWebProxy = WebRequest.GetSystemWebProxy();
             WebRequest.DefaultWebProxy.Credentials = CredentialCache.DefaultNetworkCredentials;
@@ -174,6 +239,8 @@ namespace MissionPlanner
 
             CleanupFiles();
 
+            //LoadDlls();
+
             log.InfoFormat("64bit os {0}, 64bit process {1}", System.Environment.Is64BitOperatingSystem,
                 System.Environment.Is64BitProcess);
 
@@ -182,11 +249,11 @@ namespace MissionPlanner
             Device.DeviceStructure test2 = new Device.DeviceStructure(262434);
             Device.DeviceStructure test3 = new Device.DeviceStructure(131874);
 
-            //ph2
-            Device.DeviceStructure test5 = new Device.DeviceStructure(131874);
-            Device.DeviceStructure test6 = new Device.DeviceStructure(263178);
+            //ph2 - cube with here
+            Device.DeviceStructure test5 = new Device.DeviceStructure(466441);
+            Device.DeviceStructure test6 = new Device.DeviceStructure(131874);
             Device.DeviceStructure test7 = new Device.DeviceStructure(263178);
-            // 
+            //
             Device.DeviceStructure test8 = new Device.DeviceStructure(1442082);
             Device.DeviceStructure test9 = new Device.DeviceStructure(1114914);
             Device.DeviceStructure test10 = new Device.DeviceStructure(1442826);
@@ -194,6 +261,10 @@ namespace MissionPlanner
             Device.DeviceStructure test11 = new Device.DeviceStructure(2359586);
             Device.DeviceStructure test12 = new Device.DeviceStructure(2229282);
             Device.DeviceStructure test13 = new Device.DeviceStructure(2360330);
+
+            Device.DeviceStructure test21 = new Device.DeviceStructure(592905);
+            Device.DeviceStructure test22 = new Device.DeviceStructure(131874);
+            Device.DeviceStructure test23 = new Device.DeviceStructure(263178);
 
             MAVLink.MavlinkParse tmp = new MAVLink.MavlinkParse();
             MAVLink.mavlink_heartbeat_t hb = new MAVLink.mavlink_heartbeat_t()
@@ -212,6 +283,8 @@ namespace MissionPlanner
 
             tmp.GenerateMAVLinkPacket20(MAVLink.MAVLINK_MSG_ID.HEARTBEAT, hb, true);
             tmp.GenerateMAVLinkPacket20(MAVLink.MAVLINK_MSG_ID.HEARTBEAT, hb, true);
+
+            var msg = new MAVLink.MAVLinkMessage(t2);
 
 
             try
@@ -238,6 +311,40 @@ namespace MissionPlanner
             catch
             {
             }
+        }
+
+        private static void LoadDlls()
+        {
+            var dlls = Directory.GetFiles(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "*.dll");
+
+            foreach (var dll in dlls)
+            {
+                try
+                {
+                    log.Debug("Load: "+dll);
+                    Assembly.LoadFile(dll);
+                }
+                catch (Exception ex)
+                {
+                    log.Debug(ex);
+                }
+            }
+        }
+
+        private static void CurrentDomain_FirstChanceException(object sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        {
+            log.Debug("FirstChanceException in: " + e.Exception.Source, e.Exception);
+        }
+
+        private static Assembly CurrentDomain_TypeResolve(object sender, ResolveEventArgs args)
+        {
+            log.Debug("TypeResolve Failed: " + args.Name + " from "+ args.RequestingAssembly);
+            return null;
+        }
+
+        private static void CurrentDomain_AssemblyLoad(object sender, AssemblyLoadEventArgs args)
+        {
+            log.Debug("Loaded: " + args.LoadedAssembly);
         }
 
         private static inputboxreturn CommsBaseOnInputBoxShow(string title, string prompttext, ref string text)
@@ -276,8 +383,23 @@ namespace MissionPlanner
             }
             catch
             {
-                
+
             }
+
+            try
+            {
+                var file = "px4uploader.exe";
+                var file1 = "px4uploader.dll";
+                if (File.Exists(file1) && File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+            catch
+            {
+
+            }
+
             try
             {
                 foreach (string newupdater in Directory.GetFiles(Settings.GetRunningDirectory(), "Updater.exe*.new"))
@@ -324,6 +446,10 @@ namespace MissionPlanner
 
         static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
         {
+            var list = AppDomain.CurrentDomain.ReflectionOnlyGetAssemblies();
+
+            log.Error(list);
+
             handleException((Exception) e.ExceptionObject);
         }
 
@@ -376,6 +502,12 @@ namespace MissionPlanner
                 CustomMessageBox.Show("Serial connection has been lost");
                 return;
             }
+            if (ex.Message.Contains("Array.Empty"))
+            {
+                CustomMessageBox.Show("Please install Microsoft Dot Net 4.6.2");
+                Application.Exit();
+                return;
+            }
             if (ex.Message == "A device attached to the system is not functioning.")
             {
                 CustomMessageBox.Show("Serial connection has been lost");
@@ -415,10 +547,10 @@ namespace MissionPlanner
 
             log.Info("Th Name " + Thread.Name);
 
-            DialogResult dr =
+            var dr =
                 CustomMessageBox.Show("An error has occurred\n" + ex.ToString() + "\n\nReport this Error???",
                     "Send Error", MessageBoxButtons.YesNo);
-            if (DialogResult.Yes == dr)
+            if ((int)DialogResult.Yes == dr)
             {
                 try
                 {
@@ -437,7 +569,7 @@ namespace MissionPlanner
                     {
                     }
 
-                    // Create a request using a URL that can receive a post. 
+                    // Create a request using a URL that can receive a post.
                     WebRequest request = WebRequest.Create("http://vps.oborne.me/mail.php");
                     request.Timeout = 10000; // 10 sec
                     // Set the Method property of the request to POST.

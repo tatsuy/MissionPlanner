@@ -1,16 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using MissionPlanner.Comms;
 using System.Globalization;
-using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System.IO;
+using System.Net.Sockets;
 
 namespace MissionPlanner
 {
@@ -19,7 +13,8 @@ namespace MissionPlanner
         System.Threading.Thread t12;
         static bool threadrun = false;
         static MovingBase Instance;
-        static internal SerialPort comPort = new SerialPort();
+        static TcpListener listener;
+        static ICommsSerial comPort = new SerialPort();
         static internal PointLatLngAlt lastgotolocation = new PointLatLngAlt(0, 0, 0, "Goto last");
         static internal PointLatLngAlt gotolocation = new PointLatLngAlt(0, 0, 0, "Goto");
         static internal int intalt = 100;
@@ -32,7 +27,11 @@ namespace MissionPlanner
 
             InitializeComponent();
 
-            CMB_serialport.DataSource = SerialPort.GetPortNames();
+            CMB_serialport.Items.AddRange(SerialPort.GetPortNames());
+            CMB_serialport.Items.Add("TCP Host - 14551");
+            CMB_serialport.Items.Add("TCP Client");
+            CMB_serialport.Items.Add("UDP Host - 14551");
+            CMB_serialport.Items.Add("UDP Client");
 
             CMB_updaterate.SelectedItem = updaterate;
 
@@ -58,17 +57,43 @@ namespace MissionPlanner
                 threadrun = false;
                 comPort.Close();
                 BUT_connect.Text = Strings.Connect;
-                MainV2.comPort.MAV.cs.MovingBase = null;
             }
             else
             {
                 try
                 {
-                    comPort.PortName = CMB_serialport.Text;
+                    switch (CMB_serialport.Text)
+                    {
+                        case "TCP Host - 14551":
+                        case "TCP Host":
+                            comPort = new TcpSerial();
+                            CMB_baudrate.SelectedIndex = 0;
+                            listener = new TcpListener(System.Net.IPAddress.Any, 14551);
+                            listener.Start(0);
+                            listener.BeginAcceptTcpClient(new AsyncCallback(DoAcceptTcpClientCallback), listener);
+                            BUT_connect.Text = Strings.Stop;
+                            break;
+                        case "TCP Client":
+                            comPort = new TcpSerial() { retrys = 999999, autoReconnect = true };
+                            CMB_baudrate.SelectedIndex = 0;
+                            break;
+                        case "UDP Host - 14551":
+                            comPort = new UdpSerial();
+                            CMB_baudrate.SelectedIndex = 0;
+                            break;
+                        case "UDP Client":
+                            comPort = new UdpSerialConnect();
+                            CMB_baudrate.SelectedIndex = 0;
+                            break;
+                        default:
+                            comPort = new SerialPort();
+                            comPort.PortName = CMB_serialport.Text;
+                            break;
+                    }
                 }
                 catch
                 {
-                    CustomMessageBox.Show(Strings.InvalidPortName, Strings.ERROR);
+                    CustomMessageBox.Show(Strings.InvalidPortName);
                     return;
                 }
                 try
@@ -82,7 +107,8 @@ namespace MissionPlanner
                 }
                 try
                 {
-                    comPort.Open();
+                    if (listener == null)
+                        comPort.Open();
                 }
                 catch (Exception ex)
                 {
@@ -99,6 +125,24 @@ namespace MissionPlanner
 
                 BUT_connect.Text = Strings.Stop;
             }
+        }
+
+        void DoAcceptTcpClientCallback(IAsyncResult ar)
+        {
+            // Get the listener that handles the client request.
+            TcpListener listener = (TcpListener)ar.AsyncState;
+
+            try
+            {
+                // End the operation and display the received data on  
+                // the console.
+                TcpClient client = listener.EndAcceptTcpClient(ar);
+
+                ((TcpSerial)comPort).client = client;
+
+                listener.BeginAcceptTcpClient(new AsyncCallback(DoAcceptTcpClientCallback), listener);
+            }
+            catch { }
         }
 
         void mainloop()
@@ -123,7 +167,7 @@ namespace MissionPlanner
                     {
                         string[] items = line.Trim().Split(',', '*');
 
-                        if (items[15] != GetChecksum(line.Trim()))
+                        if (items[items.Length-1] != GetChecksum(line.Trim()))
                         {
                             Console.WriteLine("Bad Nmea line " + items[15] + " vs " + GetChecksum(line.Trim()));
                             continue;
@@ -155,8 +199,7 @@ namespace MissionPlanner
                     }
 
 
-                    if (DateTime.Now > nextsend && gotolocation.Lat != 0 && gotolocation.Lng != 0 &&
-                        gotolocation.Alt != 0) // 200 * 10 = 2 sec /// lastgotolocation != gotolocation && 
+                    if (DateTime.Now > nextsend && gotolocation.Lat != 0 && gotolocation.Lng != 0) // 200 * 10 = 2 sec /// lastgotolocation != gotolocation && 
                     {
                         nextsend = DateTime.Now.AddMilliseconds(1000/updaterate);
                         Console.WriteLine("new home wp " + DateTime.Now.ToString("h:MM:ss") + " " + gotolocation.Lat +

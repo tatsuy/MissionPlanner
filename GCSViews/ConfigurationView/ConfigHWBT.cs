@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO.Ports;
 using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
 using log4net;
+using MissionPlanner.Comms;
 using MissionPlanner.Controls;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigHWBT : UserControl, IActivate
+    public partial class ConfigHWBT : MyUserControl, IActivate
     {
         private static readonly ILog log = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 

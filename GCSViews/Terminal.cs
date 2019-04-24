@@ -26,6 +26,8 @@ namespace MissionPlanner.GCSViews
         private bool inlogview;
         private int inputStartPos;
         DateTime lastsend = DateTime.MinValue;
+        public static bool SSHTerminal;
+        private SSHTerminal term = null;
 
         public Terminal()
         {
@@ -49,6 +51,9 @@ namespace MissionPlanner.GCSViews
 
                     comPort.Close();
                 }
+
+                if (term != null)
+                    term.Stop();
             }
             catch
             {
@@ -57,7 +62,7 @@ namespace MissionPlanner.GCSViews
             MainV2.instance.MenuConnect.Visible = true;
         }
 
-        private void comPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        private void comPort_DataReceived(object sender, object e)
         {
             if (!comPort.IsOpen)
                 return;
@@ -721,6 +726,14 @@ namespace MissionPlanner.GCSViews
                 start_Terminal(true);
             if (CMB_boardtype.Text.Contains("VRX"))
                 start_Terminal(true);
+            if (CMB_boardtype.Text.Contains("SSH"))
+            {
+                term = new SSHTerminal(TXT_terminal);
+                SSHTerminal = true;
+                string ip = "";
+                InputBox.Show("", "Enter IP:port", ref ip);
+                term.SSH_ConnectionInfo(ip);
+            }
         }
 
         private void start_NSHTerminal()

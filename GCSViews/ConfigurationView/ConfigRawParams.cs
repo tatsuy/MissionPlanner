@@ -1,23 +1,25 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Timers;
 using System.Windows.Forms;
 using log4net;
-using Microsoft.Scripting.Utils;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigRawParams : UserControl, IActivate, IDeactivate
+    public partial class ConfigRawParams : MyUserControl, IActivate, IDeactivate
     {
         // from http://stackoverflow.com/questions/2512781/winforms-big-paragraph-tooltip/2512895#2512895
         private const int maximumSingleLineTooltipLength = 50;
@@ -41,6 +43,13 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         {
             startup = true;
 
+            _changes.Clear();
+
+            BUT_writePIDS.Enabled = MainV2.comPort.BaseStream.IsOpen;
+            BUT_rerequestparams.Enabled = MainV2.comPort.BaseStream.IsOpen;
+            BUT_reset_params.Enabled = MainV2.comPort.BaseStream.IsOpen;
+            BUT_commitToFlash.Visible = MainV2.DisplayConfiguration.displayParamCommitButton;
+
             CMB_paramfiles.Enabled = false;
             BUT_paramfileload.Enabled = false;
             ThreadPool.QueueUserWorkItem(updatedefaultlist);
@@ -51,7 +60,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             {
                 if (!String.IsNullOrEmpty(Settings.Instance["rawparam_" + col.Name + "_width"]))
                 {
-                    col.Width = Settings.Instance.GetInt32("rawparam_" + col.Name + "_width");
+                    col.Width = Math.Max(50,Settings.Instance.GetInt32("rawparam_" + col.Name + "_width"));
                     log.InfoFormat("{0} to {1}", col.Name, col.Width);
                 }
             }
@@ -100,12 +109,15 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
                 if (dr == DialogResult.OK)
                 {
-                    loadparamsfromfile(ofd.FileName);
+                    loadparamsfromfile(ofd.FileName, !MainV2.comPort.BaseStream.IsOpen);
+
+                    if(!MainV2.comPort.BaseStream.IsOpen)
+                        Activate();
                 }
             }
         }
 
-        private void loadparamsfromfile(string fn)
+        private void loadparamsfromfile(string fn, bool offline = false)
         {
             var param2 = ParamFile.loadParamFile(fn);
 
@@ -149,6 +161,13 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                             row.Cells[1].Value = value;
                         break;
                     }
+                }
+
+                if (offline && !set)
+                {
+                    set = true;
+                    MainV2.comPort.MAV.param.Add(new MAVLink.MAVLinkParam(name, double.Parse(value),
+                        MAVLink.MAV_PARAM_TYPE.REAL32));
                 }
 
                 if (set)
@@ -224,6 +243,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             {
                 try
                 {
+                    if (MainV2.comPort.BaseStream == null || !MainV2.comPort.BaseStream.IsOpen)
+                    {
+                        CustomMessageBox.Show("Your are not connected", Strings.ERROR);
+                        return;
+                    }
+
                     MainV2.comPort.setParam(value, (float) _changes[value]);
 
                     try
@@ -261,6 +286,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                     CustomMessageBox.Show("Set " + value + " Failed");
                 }
             }
+
+            CustomMessageBox.Show("Parameters successfully saved.", "Saved");
         }
 
         private void BUT_compare_Click(object sender, EventArgs e)
@@ -293,7 +320,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (!MainV2.comPort.BaseStream.IsOpen)
                 return;
 
-            if (!MainV2.comPort.MAV.cs.armed || DialogResult.OK ==
+            if (!MainV2.comPort.MAV.cs.armed || (int)DialogResult.OK ==
                 CustomMessageBox.Show(Strings.WarningUpdateParamList, Strings.ERROR, MessageBoxButtons.OKCancel))
             {
                 ((Control) sender).Enabled = false;
@@ -350,9 +377,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                     {
                         CustomMessageBox.Show(
                             Params[Command.Index, e.RowIndex].Value +
-                            " is marked as ReadOnly, and should not be changed", "ReadOnly",
+                            " is marked as ReadOnly, and will not be changed", "ReadOnly",
                             MessageBoxButtons.OK);
-
+                        return;
                     }
                 }
 
@@ -365,7 +392,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                             CustomMessageBox.Show(
                                 Params[Command.Index, e.RowIndex].Value +
                                 " value is out of range. Do you want to continue?", "Out of range",
-                                MessageBoxButtons.YesNo) == DialogResult.No)
+                                MessageBoxButtons.YesNo) == (int)DialogResult.No)
                         {
                             return;
                         }
@@ -418,34 +445,28 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             toolTip1.RemoveAll();
             Params.Rows.Clear();
 
-
-            //Params.Sort(Params.Columns[0], ListSortDirection.Ascending);
-
             log.Info("processToScreen");
 
-            var sorted = new List<string>();
+            var list = new List<string>();
             foreach (string item in MainV2.comPort.MAV.param.Keys)
-                sorted.Add(item);
-
-            sorted.Sort();
-
-            log.Info("sorted");
+                list.Add(item);
 
             var rowlist = new List<DataGridViewRow>();
 
             // process hashdefines and update display
-            foreach (var value in sorted)
+            Parallel.ForEach(list, value =>
             {
                 if (value == null || value == "")
-                    continue;
-
-                log.Info("Doing: " + value);
+                    return;
 
                 var row = new DataGridViewRow();
-                rowlist.Add(row);
+                lock(rowlist)
+                    rowlist.Add(row);
                 row.CreateCells(Params);
                 row.Cells[Command.Index].Value = value;
                 row.Cells[Value.Index].Value = MainV2.comPort.MAV.param[value].ToString();
+                var fav_params = Settings.Instance.GetList("fav_params");
+                row.Cells[Fav.Index].Value = fav_params.Contains(value);
                 try
                 {
                     var metaDataDescription = ParameterMetaDataRepository.GetParameterMetaData(value,
@@ -471,15 +492,54 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 {
                     log.Error(ex);
                 }
-            }
+            });
 
             log.Info("about to add all");
 
+            Params.SuspendLayout();
+            Params.Visible = false;
             Params.Enabled = false;
+
             Params.Rows.AddRange(rowlist.ToArray());
+
+            log.Info("about to sort");
+
+            Params.SortCompare += OnParamsOnSortCompare;
+
+            Params.Sort(Params.Columns[Command.Index], ListSortDirection.Ascending);
+
             Params.Enabled = true;
+            Params.Visible = true;
+            Params.ResumeLayout();
 
             log.Info("Done");
+        }
+
+        private void OnParamsOnSortCompare(object sender, DataGridViewSortCompareEventArgs args)
+        {
+            var fav1obj = Params[Fav.Index, args.RowIndex1].Value;
+            var fav2obj = Params[Fav.Index, args.RowIndex2].Value;
+
+            var fav1 = fav1obj == null ? false : (bool) fav1obj;
+
+            var fav2 = fav2obj == null ? false : (bool) fav2obj;
+
+            if (args.CellValue1 == null)
+                return;
+
+            if (args.CellValue2 == null)
+                return;
+
+            args.SortResult = args.CellValue1.ToString().CompareTo(args.CellValue2.ToString());
+            args.Handled = true;
+
+            if (fav1 && fav2)
+            {
+                return;
+            }
+
+            if (fav1 || fav2)
+                args.SortResult = fav1.CompareTo(fav2) * (Params.SortOrder == SortOrder.Ascending ? -1 : 1);
         }
 
         private void updatedefaultlist(object crap)
@@ -488,7 +548,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             {
                 if (paramfiles == null)
                 {
-                    paramfiles = GitHubContent.GetDirContent("diydrones", "ardupilot", "/Tools/Frame_params/", ".param");
+                    paramfiles = GitHubContent.GetDirContent("ardupilot", "ardupilot", "/Tools/Frame_params/", ".param");
                 }
 
                 BeginInvoke((Action) delegate
@@ -507,9 +567,12 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         void filterList(string searchfor)
         {
+            DateTime start = DateTime.Now;
+            Params.SuspendLayout();
+            Params.Enabled = false;
             if (searchfor.Length >= 2 || searchfor.Length == 0)
             {
-                Regex filter = new Regex(searchfor,RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline);
+                Regex filter = new Regex(searchfor.Replace("*",".*").Replace("..*",".*"),RegexOptions.IgnoreCase | RegexOptions.Compiled | RegexOptions.Singleline);
 
                 foreach (DataGridViewRow row in Params.Rows)
                 {
@@ -523,9 +586,27 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                         row.Visible = false;
                     }
                 }
-
-                Params.Refresh();
             }
+
+            if (chk_modified.Checked)
+            {
+                foreach (DataGridViewRow row in Params.Rows)
+                {
+                    // is it modified? - always show
+                    if (_changes.ContainsKey(row.Cells[Command.Index].Value))
+                    {
+                        row.Visible = true;
+                    }
+                    else
+                    {
+                        row.Visible = false;
+                    }
+                }
+            }
+            Params.Enabled = true;
+            Params.ResumeLayout();
+
+            log.InfoFormat("Filter: {0}ms", (DateTime.Now - start).TotalMilliseconds);
         }
 
         private void BUT_paramfileload_Click(object sender, EventArgs e)
@@ -566,7 +647,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         {
             if (
                 CustomMessageBox.Show("Reset all parameters to default\nAre you sure!!", "Reset",
-                    MessageBoxButtons.YesNo) == DialogResult.Yes)
+                    MessageBoxButtons.YesNo) == (int)DialogResult.Yes)
             {
                 try
                 {
@@ -620,15 +701,40 @@ namespace MissionPlanner.GCSViews.ConfigurationView
         private void Params_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             // Only process the Description column
-            if (e.RowIndex == -1 || startup || e.ColumnIndex != 4)
+            if (e.RowIndex == -1 || startup)
                 return;
 
-            try
+            if (e.ColumnIndex == 4)
             {
-                string descStr = Params[e.ColumnIndex, e.RowIndex].Value.ToString();
-                CheckForUrlAndLaunchInBrowser(descStr);
+                try
+                {
+                    string descStr = Params[e.ColumnIndex, e.RowIndex].Value.ToString();
+                    CheckForUrlAndLaunchInBrowser(descStr);
+                }
+                catch
+                {
+                }
             }
-            catch { }
+
+            if (e.ColumnIndex == 5)
+            {
+                var check = Params[e.ColumnIndex, e.RowIndex].EditedFormattedValue;
+                var name = Params[Command.Index, e.RowIndex].Value.ToString();
+
+                if (check != null && (bool)check)
+                {
+                    // add entry
+                    Settings.Instance.AppendList("fav_params", name);
+                }
+                else
+                {
+                    // remove entry
+                    var list = Settings.Instance.GetList("fav_params");
+                    Settings.Instance.SetList("fav_params", list.Where(s => s != name));
+                }
+
+                Params.Sort(Command, ListSortDirection.Ascending);
+            }
         }
 
         public static void CheckForUrlAndLaunchInBrowser(string stringWithPossibleUrl)
@@ -656,6 +762,55 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                     return;
                 }
             }
+        }
+
+        private void BUT_commitToFlash_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                MainV2.comPort.doCommand(MAVLink.MAV_CMD.PREFLIGHT_STORAGE, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+            }
+            catch
+            {
+                CustomMessageBox.Show("Invalid command");
+                return;
+            }
+
+            CustomMessageBox.Show("Parameters committed to non-volatile memory");
+            return;
+        }
+
+        private void Params_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (e.ColumnIndex == Value.Index)
+            {
+                var check = Params[e.ColumnIndex, e.RowIndex].EditedFormattedValue;
+                var name = Params[Command.Index, e.RowIndex].Value.ToString();
+
+                var availableBitMask =
+                    ParameterMetaDataRepository.GetParameterBitMaskInt(name, MainV2.comPort.MAV.cs.firmware.ToString());
+                if (availableBitMask.Count > 0)
+                {
+                    var mcb = new MavlinkCheckBoxBitMask();
+                    var list = new MAVLink.MAVLinkParamList();
+                    list.Add(new MAVLink.MAVLinkParam(name, double.Parse(check.ToString(), CultureInfo.InvariantCulture),
+                        MAVLink.MAV_PARAM_TYPE.INT32));
+                    mcb.setup(name, list);
+                    mcb.ValueChanged += (o, s, value) =>
+                    {
+                        Params[e.ColumnIndex, e.RowIndex].Value = value;
+                        Params.Invalidate();
+                        mcb.Focus();
+                    };
+                    var frm = mcb.ShowUserControl();
+                    frm.TopMost = true;
+                }
+            }
+        }
+
+        private void chk_modified_CheckedChanged(object sender, EventArgs e)
+        {
+            FilterTimerOnElapsed(null, null);
         }
     }
 }

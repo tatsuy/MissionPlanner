@@ -48,6 +48,8 @@
             this.BUT_reset_params = new MissionPlanner.Controls.MyButton();
             this.txt_search = new System.Windows.Forms.TextBox();
             this.label2 = new System.Windows.Forms.Label();
+            this.BUT_commitToFlash = new MissionPlanner.Controls.MyButton();
+            this.chk_modified = new System.Windows.Forms.CheckBox();
             ((System.ComponentModel.ISupportInitialize)(this.Params)).BeginInit();
             this.SuspendLayout();
             // 
@@ -83,18 +85,21 @@
             this.olvColumn4,
             this.olvColumn5});
             this.Params.DataSource = null;
-            this.Params.ForeColor = System.Drawing.Color.White;
+            this.Params.HideSelection = false;
             this.Params.Name = "Params";
             this.Params.OwnerDraw = true;
             this.Params.RootKeyValueString = "";
             this.Params.RowHeight = 26;
             this.Params.ShowGroups = false;
+            this.Params.ShowItemToolTips = true;
             this.Params.UseAlternatingBackColors = true;
             this.Params.UseCompatibleStateImageBehavior = false;
             this.Params.View = System.Windows.Forms.View.Details;
             this.Params.VirtualMode = true;
             this.Params.CellEditFinishing += new BrightIdeasSoftware.CellEditEventHandler(this.Params_CellEditFinishing);
             this.Params.CellClick += new System.EventHandler<BrightIdeasSoftware.CellClickEventArgs>(this.Params_CellClick);
+            this.Params.CellOver += new System.EventHandler<BrightIdeasSoftware.CellOverEventArgs>(this.Params_CellOver);
+            this.Params.CellToolTipShowing += new System.EventHandler<BrightIdeasSoftware.ToolTipShowingEventArgs>(this.Params_CellToolTipShowing);
             this.Params.FormatRow += new System.EventHandler<BrightIdeasSoftware.FormatRowEventArgs>(this.Params_FormatRow);
             // 
             // olvColumn1
@@ -196,9 +201,24 @@
             resources.ApplyResources(this.label2, "label2");
             this.label2.Name = "label2";
             // 
+            // BUT_commitToFlash
+            // 
+            resources.ApplyResources(this.BUT_commitToFlash, "BUT_commitToFlash");
+            this.BUT_commitToFlash.Name = "BUT_commitToFlash";
+            this.BUT_commitToFlash.UseVisualStyleBackColor = true;
+            this.BUT_commitToFlash.Click += new System.EventHandler(this.BUT_commitToFlash_Click);
+            // 
+            // chk_modified
+            // 
+            resources.ApplyResources(this.chk_modified, "chk_modified");
+            this.chk_modified.Name = "chk_modified";
+            this.chk_modified.UseVisualStyleBackColor = true;
+            this.chk_modified.CheckedChanged += new System.EventHandler(this.chk_modified_CheckedChanged);
+            // 
             // ConfigRawParamsTree
             // 
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
+            this.Controls.Add(this.chk_modified);
+            this.Controls.Add(this.BUT_commitToFlash);
             this.Controls.Add(this.label2);
             this.Controls.Add(this.txt_search);
             this.Controls.Add(this.Params);
@@ -239,5 +259,7 @@
         private BrightIdeasSoftware.OLVColumn olvColumn5;
         private System.Windows.Forms.TextBox txt_search;
         private System.Windows.Forms.Label label2;
+        private Controls.MyButton BUT_commitToFlash;
+        private System.Windows.Forms.CheckBox chk_modified;
     }
 }

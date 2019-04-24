@@ -1,40 +1,43 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Configuration;
 using System.Data;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
-using System.IO.Ports;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Xml;
+using System.Xml.Serialization;
 using DotSpatial.Data;
 using DotSpatial.Projections;
+using DotSpatial.Symbology;
 using GMap.NET;
 using GMap.NET.MapProviders;
 using GMap.NET.WindowsForms;
 using log4net;
-using MissionPlanner.Arduino;
+using Microsoft.Scripting.Utils;
 using MissionPlanner.Comms;
 using MissionPlanner.Controls;
 using MissionPlanner.GCSViews;
 using MissionPlanner.GeoRef;
-using MissionPlanner.HIL;
 using MissionPlanner.Log;
 using MissionPlanner.Maps;
 using MissionPlanner.Swarm;
 using MissionPlanner.Utilities;
 using MissionPlanner.Warnings;
 using resedit;
+using static MissionPlanner.Utilities.Firmware;
 using ILog = log4net.ILog;
-using LogAnalyzer = MissionPlanner.Utilities.LogAnalyzer;
 
 namespace MissionPlanner
 {
@@ -42,8 +45,6 @@ namespace MissionPlanner
     {
         private static readonly ILog log =
             LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-
-        public static XPlane xp;
 
         private static MAVLinkSerialPort comport;
 
@@ -54,27 +55,6 @@ namespace MissionPlanner
         public temp()
         {
             InitializeComponent();
-
-            //if (System.Diagnostics.Debugger.IsAttached) 
-            {
-                try
-                {
-                    var ogl = new OpenGLtest2();
-
-                    Controls.Add(ogl);
-
-                    ogl.Dock = DockStyle.Fill;
-
-                    ogl.Click += delegate(object sender, EventArgs args)
-                    {
-                        tableLayoutPanel1.Visible = !tableLayoutPanel1.Visible;
-                        controlSensorsStatus1.Visible = !controlSensorsStatus1.Visible;
-                    };
-                }
-                catch
-                {
-                }
-            }
 
             Tracking.AddPage(
                 MethodBase.GetCurrentMethod().DeclaringType.ToString(),
@@ -97,7 +77,8 @@ namespace MissionPlanner
 
             MainMap.MapProvider = GoogleSatelliteMapProvider.Instance;
 
-            MainMap.CacheLocation = Path.GetDirectoryName(Application.ExecutablePath) + "/gmapcache/";
+            MainMap.CacheLocation = Settings.GetDataDirectory() +
+                                    "gmapcache" + Path.DirectorySeparatorChar;
 
             var fbd = new FolderBrowserDialog();
 
@@ -156,6 +137,8 @@ namespace MissionPlanner
                     // Application.DoEvents();
                 }
             }
+
+            MainMap.Dispose();
         }
 
         private void BUT_clearcustommaps_Click(object sender, EventArgs e)
@@ -168,6 +151,8 @@ namespace MissionPlanner
             CustomMessageBox.Show("Removed " + removed + " images");
 
             log.InfoFormat("Removed {0} images", removed);
+
+            MainMap.Dispose();
         }
 
         private void BUT_lang_edit_Click(object sender, EventArgs e)
@@ -189,7 +174,10 @@ namespace MissionPlanner
 
         private void BUT_paramgen_Click(object sender, EventArgs e)
         {
-            ParameterMetaDataParser.GetParameterInformation();
+            if(MissionPlanner.Utilities.Update.dobeta)
+                ParameterMetaDataParser.GetParameterInformation(ConfigurationManager.AppSettings["ParameterLocationsBleeding"]);
+            else
+                ParameterMetaDataParser.GetParameterInformation(ConfigurationManager.AppSettings["ParameterLocations"]);
 
             ParameterMetaDataRepositoryAPM.Reload();
         }
@@ -203,32 +191,6 @@ namespace MissionPlanner
         {
             new OSDVideo().Show();
         }
-
-        private void BUT_xplane_Click(object sender, EventArgs e)
-        {
-            if (xp == null)
-            {
-                xp = new XPlane();
-
-                xp.SetupSockets(49005, 49000, "127.0.0.1");
-            }
-
-
-            ThreadPool.QueueUserWorkItem(runxplanemove);
-
-            //xp.Shutdown();
-        }
-
-        private void runxplanemove(object o)
-        {
-            while (xp != null)
-            {
-                Thread.Sleep(500);
-                xp.MoveToPos(MainV2.comPort.MAV.cs.lat, MainV2.comPort.MAV.cs.lng, MainV2.comPort.MAV.cs.alt,
-                    MainV2.comPort.MAV.cs.roll, MainV2.comPort.MAV.cs.pitch, MainV2.comPort.MAV.cs.yaw);
-            }
-        }
-
 
         private void BUT_swarm_Click(object sender, EventArgs e)
         {
@@ -249,7 +211,6 @@ namespace MissionPlanner
         {
             new FollowPathControl().Show();
         }
-
 
         private void BUT_sorttlogs_Click(object sender, EventArgs e)
         {
@@ -285,159 +246,47 @@ namespace MissionPlanner
 
             var list = fw.getFWList();
 
-            using (
-                var xmlwriter = new XmlTextWriter(basedir + Path.DirectorySeparatorChar + @"firmware2.xml",
-                    Encoding.ASCII))
+            var options = new optionsObject();
+            options.softwares = list;
+
+            var members = typeof(software).GetFields();
+
+            XmlWriterSettings settings = new XmlWriterSettings();
+            settings.IndentChars = "    ";
+            settings.Indent = true;
+            settings.Encoding = Encoding.ASCII;
+
+            using (var xmlwriter = XmlWriter.Create(basedir + Path.DirectorySeparatorChar + @"firmware2.xml", settings))
             {
-                xmlwriter.Formatting = Formatting.Indented;
-
-                xmlwriter.WriteStartDocument();
-
-                xmlwriter.WriteStartElement("options");
-
-                int a = 0;
-
-                foreach (var software in list)
+                for (int a=0; a < options.softwares.Count; a++)
                 {
-                    a++;
-                    Loading.ShowLoading(((a-1)/(float)list.Count)*100.0+"% "+software.name, this);
+                    Loading.ShowLoading(((a - 1) / (float)list.Count) * 100.0 + "% " + options.softwares[a].name, this);
 
-                    //if (!software.name.Contains("Copter"))
-                    //  continue;
+                    List<Task<bool>> tasklist = new List<Task<bool>>();
 
-                    xmlwriter.WriteStartElement("Firmware");
+                    foreach (var field in members)
+                    {
+                        if (field.Name.ToLower().Contains("url"))
+                        {
+                            var url = field.GetValue(options.softwares[a]).ToString();
 
-                    if (software.url != "")
-                        xmlwriter.WriteElementString("url", new Uri(software.url).LocalPath.TrimStart('/', '\\'));
-                    if (software.url2560 != "")
-                        xmlwriter.WriteElementString("url2560", new Uri(software.url2560).LocalPath.TrimStart('/', '\\'));
-                    if (software.url2560_2 != "")
-                        xmlwriter.WriteElementString("url2560-2",
-                            new Uri(software.url2560_2).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlpx4v1 != "")
-                        xmlwriter.WriteElementString("urlpx4", new Uri(software.urlpx4v1).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlpx4v2 != "")
-                        xmlwriter.WriteElementString("urlpx4v2",
-                            new Uri(software.urlpx4v2).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlpx4v4 != "")
-                        xmlwriter.WriteElementString("urlpx4v4",
-                            new Uri(software.urlpx4v4).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrbrainv40 != "")
-                        xmlwriter.WriteElementString("urlvrbrainv40",
-                            new Uri(software.urlvrbrainv40).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrbrainv45 != "")
-                        xmlwriter.WriteElementString("urlvrbrainv45",
-                            new Uri(software.urlvrbrainv45).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrbrainv50 != "")
-                        xmlwriter.WriteElementString("urlvrbrainv50",
-                            new Uri(software.urlvrbrainv50).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrbrainv51 != "")
-                        xmlwriter.WriteElementString("urlvrbrainv51",
-                            new Uri(software.urlvrbrainv51).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrbrainv52 != "")
-                        xmlwriter.WriteElementString("urlvrbrainv52",
-                            new Uri(software.urlvrbrainv52).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrcorev10 != "")
-                        xmlwriter.WriteElementString("urlvrcorev10",
-                            new Uri(software.urlvrcorev10).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrubrainv51 != "")
-                        xmlwriter.WriteElementString("urlvrubrainv51",
-                            new Uri(software.urlvrubrainv51).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlvrubrainv52 != "")
-                        xmlwriter.WriteElementString("urlvrubrainv52",
-                            new Uri(software.urlvrubrainv52).LocalPath.TrimStart('/', '\\'));
-                    if (software.urlbebop2 != "")
-                        xmlwriter.WriteElementString("urlbebop2",
-                            new Uri(software.urlbebop2).LocalPath.TrimStart('/', '\\'));
-                    if (software.urldisco != "")
-                        xmlwriter.WriteElementString("urldisco",
-                            new Uri(software.urldisco).LocalPath.TrimStart('/', '\\'));
-                    xmlwriter.WriteElementString("name", software.name);
-                    xmlwriter.WriteElementString("desc", software.desc);
-                    xmlwriter.WriteElementString("format_version", software.k_format_version.ToString());
+                            if (String.IsNullOrEmpty(url))
+                                continue;
 
-                    xmlwriter.WriteEndElement();
+                            field.SetValue(options.softwares[a], new Uri(url).LocalPath.TrimStart('/', '\\'));
 
-                    if (software.url != "")
-                    {
-                        Common.getFilefromNet(software.url, basedir + new Uri(software.url).LocalPath);
-                    }
-                    if (software.url2560 != "")
-                    {
-                        Common.getFilefromNet(software.url2560, basedir + new Uri(software.url2560).LocalPath);
-                    }
-                    if (software.url2560_2 != "")
-                    {
-                        Common.getFilefromNet(software.url2560_2, basedir + new Uri(software.url2560_2).LocalPath);
-                    }
-                    if (software.urlpx4v1 != "")
-                    {
-                        Common.getFilefromNet(software.urlpx4v1, basedir + new Uri(software.urlpx4v1).LocalPath);
-                    }
-                    if (software.urlpx4v2 != "")
-                    {
-                        Common.getFilefromNet(software.urlpx4v2, basedir + new Uri(software.urlpx4v2).LocalPath);
-                    }
-                    if (software.urlpx4v4 != "")
-                    {
-                        Common.getFilefromNet(software.urlpx4v4, basedir + new Uri(software.urlpx4v4).LocalPath);
+                            var task = Download.getFilefromNetAsync(url, basedir + new Uri(url).LocalPath);
+                            tasklist.Add(task);
+                        }
                     }
 
-                    if (software.urlvrbrainv40 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrbrainv40,
-                            basedir + new Uri(software.urlvrbrainv40).LocalPath);
-                    }
-                    if (software.urlvrbrainv45 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrbrainv45,
-                            basedir + new Uri(software.urlvrbrainv45).LocalPath);
-                    }
-                    if (software.urlvrbrainv50 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrbrainv50,
-                            basedir + new Uri(software.urlvrbrainv50).LocalPath);
-                    }
-                    if (software.urlvrbrainv51 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrbrainv51,
-                            basedir + new Uri(software.urlvrbrainv51).LocalPath);
-                    }
-                    if (software.urlvrbrainv52 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrbrainv52,
-                            basedir + new Uri(software.urlvrbrainv52).LocalPath);
-                    }
-                    if (software.urlvrcorev10 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrcorev10, basedir + new Uri(software.urlvrcorev10).LocalPath);
-                    }
-                    if (software.urlvrubrainv51 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrubrainv51,
-                            basedir + new Uri(software.urlvrubrainv51).LocalPath);
-                    }
-                    if (software.urlvrubrainv52 != "")
-                    {
-                        Common.getFilefromNet(software.urlvrubrainv52,
-                            basedir + new Uri(software.urlvrubrainv52).LocalPath);
-                    }
-                    if (software.urlbebop2 != "")
-                    {
-                        Common.getFilefromNet(software.urlbebop2,
-                            basedir + new Uri(software.urlbebop2).LocalPath);
-                    }
-                    if (software.urldisco != "")
-                    {
-                        Common.getFilefromNet(software.urldisco,
-                            basedir + new Uri(software.urldisco).LocalPath);
-                    }
+                    //Task.WaitAll(tasklist.ToArray());
                 }
 
-                xmlwriter.WriteEndElement();
-                xmlwriter.WriteEndDocument();
-            }
+                XmlSerializer xms = new XmlSerializer(typeof(optionsObject), new Type[] { typeof(software) });
 
+                xms.Serialize(xmlwriter, options);
+            }
             Loading.Close();
         }
 
@@ -752,7 +601,8 @@ namespace MissionPlanner
 
         private void but_reboot_Click(object sender, EventArgs e)
         {
-            MainV2.comPort.doReboot(false, true);
+            if (CustomMessageBox.Show("Are you sure?","",MessageBoxButtons.YesNo) == (int)DialogResult.Yes)
+                MainV2.comPort.doReboot(false, true);
         }
 
         private void BUT_QNH_Click(object sender, EventArgs e)
@@ -770,11 +620,7 @@ namespace MissionPlanner
 
         private void but_trimble_Click(object sender, EventArgs e)
         {
-            var port = "com1";
-            if (InputBox.Show("enter comport", "enter comport", ref port) == DialogResult.OK)
-            {
-                new AP_GPS_GSOF(port);
-            }
+            new Swarm.Sequence.LayoutEditor().Show();
         }
 
         private void myButton_vlc_Click(object sender, EventArgs e)
@@ -800,9 +646,14 @@ namespace MissionPlanner
         {
             try
             {
-                if (GStreamer.checkGstLaunchExe())
+                GStreamer.gstlaunch = GStreamer.LookForGstreamer();
+                if (File.Exists(GStreamer.gstlaunch))
                 {
                     GStreamer.Start();
+                }
+                else
+                {
+                    UDPVideoShim.DownloadGStreamer();
                 }
             }
             catch (Exception ex)
@@ -855,7 +706,29 @@ namespace MissionPlanner
          "https://raw.githubusercontent.com/ArduPilot/ardupilot/Copter-3.4/ArduCopter/Parameters.cpp"
          , "ArduCopter3.4.xml");
 
+            ParameterMetaDataParser.GetParameterInformation(
+                "https://raw.githubusercontent.com/ArduPilot/ardupilot/Copter-3.4.6/ArduCopter/Parameters.cpp"
+                , "ArduCopter3.4.6.xml");
+
+            ParameterMetaDataParser.GetParameterInformation(
+                "https://raw.githubusercontent.com/ArduPilot/ardupilot/Copter-3.5.0/ArduCopter/Parameters.cpp"
+                , "ArduCopter3.5.0.xml");
+
+            ParameterMetaDataParser.GetParameterInformation(
+                "https://raw.githubusercontent.com/ArduPilot/ardupilot/Copter-3.5.2/ArduCopter/Parameters.cpp"
+                , "ArduCopter3.5.2.xml");
+
+            ParameterMetaDataParser.GetParameterInformation(
+                "https://raw.githubusercontent.com/ArduPilot/ardupilot/Copter-3.5.4/ArduCopter/Parameters.cpp"
+                , "ArduCopter3.5.4.xml");
+
+
+
             // plane
+
+            ParameterMetaDataParser.GetParameterInformation(
+                "https://raw.githubusercontent.com/ArduPilot/ardupilot/ArduPlane-3.8.3/ArduPlane/Parameters.cpp"
+                , "ArduPlane3.8.3.xml");
 
             ParameterMetaDataParser.GetParameterInformation(
           "https://raw.githubusercontent.com/ArduPilot/ardupilot/ArduPlane-3.7.1/ArduPlane/Parameters.cpp"
@@ -952,9 +825,9 @@ namespace MissionPlanner
 
             SaveFileDialog sfd = new SaveFileDialog();
             sfd.FileName = "output.dat";
-            sfd.ShowDialog();
+            var result = sfd.ShowDialog();
 
-            if (ofd.CheckFileExists)
+            if (ofd.CheckFileExists && result == DialogResult.OK)
             {
                 using (var st = sfd.OpenFile())
                 {
@@ -1041,6 +914,215 @@ namespace MissionPlanner
         {
             LogDownloadscp form = new LogDownloadscp();
             form.Show();
+        }
+
+        private void but_td_Click(object sender, EventArgs e)
+        {
+           
+        }
+
+        private void but_dem_Click(object sender, EventArgs e)
+        {
+            UserControl ctl = new UserControl() {Width = 1100, AutoSize = true};
+
+            string line = "";
+
+            foreach (var item in GeoTiff.index)
+            {
+                //log.InfoFormat("Start Point ({0},{1},{2}) --> ({3},{4},{5})", item.i, item.j, item.k, item.x, item.y, item.z);
+
+                line += String.Format("{0} = {1} = {2}*{3} {4}\n", item.FileName, item.Area, item.width, item.height, item.bits,
+                    item.xscale, item.yscale, item.zscale);
+            }
+
+            ctl.Controls.Add(new Label() {Text = line, AutoSize = true, Location = new Point(0, 30)});
+            var butt = new MyButton() {Text = "Open DEM Dir"};
+            butt.Click += (a, ev) =>
+            {
+                System.Diagnostics.Process.Start(@"C:\ProgramData\Mission Planner\srtm\");
+            };
+            ctl.Controls.Add(butt);
+
+            ctl.ShowUserControl();
+        }
+
+        private void but_gsttest_Click(object sender, EventArgs e)
+        {
+            System.Threading.ThreadPool.QueueUserWorkItem((a) =>
+            {
+                //GStreamer.test();
+            });
+        }
+
+        private void but_proximity_Click(object sender, EventArgs e)
+        {
+            new ProximityControl(MainV2.comPort.MAV).Show();
+        }
+
+        private void but_dashware_Click(object sender, EventArgs e)
+        {
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "bin|*.bin";
+            ofd.ShowDialog();
+
+            if (ofd.CheckFileExists)
+            {
+                string options = "GPS;ATT;NTUN;CTUN;MODE;CURR";
+                InputBox.Show("", "Enter Messages you want eg PARM;NTUN;CTUN", ref options);
+
+                var split = options.Split(new[] {';'}, StringSplitOptions.RemoveEmptyEntries);
+
+                DashWare.Create(ofd.FileName, ofd.FileName + ".csv", split.Length > 0 ? split.ToList() : null);
+            }
+        }
+
+        private void but_mavinspector_Click(object sender, EventArgs e)
+        {
+            new MAVLinkInspector(MainV2.comPort).Show();
+        }
+
+        private void BUT_driverclean_Click(object sender, EventArgs e)
+        {
+            CleanDrivers.Clean();
+        }
+
+        private void but_blupdate_Click(object sender, EventArgs e)
+        {
+            if (CustomMessageBox.Show("Are you sure you want to upgrade the bootloader? This can brick your board",
+                    "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int)DialogResult.Yes)
+                if (CustomMessageBox.Show("Are you sure you want to upgrade the bootloader? This can brick your board",
+                        "BL Update", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == (int) DialogResult.Yes)
+                    if (MainV2.comPort.doCommand(MAVLink.MAV_CMD.FLASH_BOOTLOADER, 0, 0, 0, 0, 290876, 0, 0))
+                    {
+                        CustomMessageBox.Show("Upgraded bootloader");
+                    }
+                    else
+                    {
+                        CustomMessageBox.Show("Failed to upgrade bootloader");
+                    }
+        }
+
+        private void but_3dmap_Click(object sender, EventArgs e)
+        {
+            var ogl = new OpenGLtest2();
+
+            ogl.ShowUserControl();
+        }
+
+        private void but_anonlog_Click(object sender, EventArgs e)
+        {
+            CustomMessageBox.Show("This is beta, please confirm the output file");
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "tlog or bin/log|*.tlog;*.bin;*.log";
+
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    var ext = Path.GetExtension(ofd.FileName).ToLower();
+                    if (ext == ".bin")
+                        ext = ".log";
+                    using (SaveFileDialog sfd = new SaveFileDialog())
+                    {
+                        sfd.DefaultExt = ext;
+                        sfd.FileName = Path.GetFileNameWithoutExtension(ofd.FileName) + "-anon" + ext;
+                        if (sfd.ShowDialog() == DialogResult.OK)
+                        {
+                            Privacy.anonymise(ofd.FileName, sfd.FileName);
+                        }
+                    }
+                }
+            }
+        }
+
+        private void but_messageinterval_Click(object sender, EventArgs e)
+        {
+            var form = new Form();
+            FlowLayoutPanel flp = new FlowLayoutPanel();
+            flp.Dock = DockStyle.Fill;
+            flp.AutoSize = true;
+            ComboBox cmb = new ComboBox();
+            cmb.DataSource = Enum.GetNames(typeof(MAVLink.MAVLINK_MSG_ID)).ToSortedList((s, s1) => s.CompareTo(s1));
+            cmb.Width += 50;
+            Button but = new Button();
+            but.Text = "Set";
+            ComboBox cmbrate = new ComboBox();
+            cmbrate.DataSource = Enumerable.Range(1, 200).ToList();
+
+            but.Click += (o, args) =>
+            {
+                var rate = int.Parse(cmbrate.Text.ToString());
+                var value = Enum.Parse(typeof(MAVLink.MAVLINK_MSG_ID), cmb.Text.ToString());
+                MainV2.comPort.doCommand(MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float) (int) value,
+                    1 / (float) rate * 1000000.0f, 0, 0, 0, 0, 0);
+            };
+
+            Button but2 = new Button();
+            but2.Text = "Set All";
+            but2.Click += (o, args) =>
+            {
+                var rate = int.Parse(cmbrate.Text.ToString());
+                ((IList) cmb.DataSource).ForEach(a =>
+                {
+                    var value = Enum.Parse(typeof(MAVLink.MAVLINK_MSG_ID), a.ToString());
+                    MainV2.comPort.doCommand(MAVLink.MAV_CMD.SET_MESSAGE_INTERVAL, (float) (int) value,
+                        1 / (float) rate * 1000000.0f, 0, 0, 0, 0, 0, false);
+                });
+            };
+
+            //cmb.SelectedIndexChanged += (o, args) => { MAVLink.MAVLINK_MSG_ID.GET_MESSAGE_INTERVAL };
+
+            form.Controls.Add(flp);
+
+            flp.Controls.Add(cmb);
+            flp.Controls.Add(cmbrate);
+            flp.Controls.Add(but);
+
+            flp.Controls.Add(but2);
+
+            form.Show(this);
+        }
+
+        private void BUT_xplane_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void but_disablearmswitch_Click(object sender, EventArgs e)
+        {
+            if (CustomMessageBox.Show("Are you sure?", "", MessageBoxButtons.YesNo) == (int) DialogResult.Yes)
+                MainV2.comPort.setMode(
+                    new MAVLink.mavlink_set_mode_t() {custom_mode = MainV2.comPort.MAV.cs.armed ? 0u : 1u},
+                    MAVLink.MAV_MODE_FLAG.SAFETY_ARMED);
+        }
+
+        private void but_hwids_Click(object sender, EventArgs e)
+        {
+            string value = "0";
+            if (InputBox.Show("hwid", "Enter the ID number", ref value, false, true) == DialogResult.OK)
+            {
+                StringBuilder sb = new StringBuilder(); 
+                var items = value.Split(new char[] { '\r', '\n'}, StringSplitOptions.RemoveEmptyEntries);
+
+                foreach (var item in items)
+                {
+                    var items2 = item.Split(new char[] {' ', '\t'});
+
+                    foreach (var item2 in items2)
+                    {
+                        uint uintvalue = 0;
+
+                        if (uint.TryParse(item2, out uintvalue))
+                        {
+                            Device.DeviceStructure test1 = new Device.DeviceStructure(uintvalue);
+
+                            sb.AppendLine(item.Replace('\t',' ') + " = " + test1.ToString());
+                           
+                        }
+                    }
+                }
+
+                CustomMessageBox.Show(sb.ToString());
+            }
         }
     }
 }

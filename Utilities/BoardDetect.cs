@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Reflection;
 using System.Management;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using System.Threading;
 using log4net;
-using System.Globalization;
 using MissionPlanner.Comms;
-using MissionPlanner.Utilities;
 using px4uploader;
 
 namespace MissionPlanner.Utilities
@@ -22,22 +21,32 @@ namespace MissionPlanner.Utilities
             b2560, // apm1
             b2560v2, // apm 2+
             px4, // px3
+            px4rl,
             px4v2, // pixhawk
             px4v3, // cube/pixhawk with 2mb flash
             px4v4, // pixracer
+            px4v4pro, // Pixhawk 3 Pro
+            fmuv5, // PixHackV5 and Pixhawk4
             vrbrainv40,
             vrbrainv45,
             vrbrainv50,
             vrbrainv51,
             vrbrainv52,
+            vrbrainv54,
             vrcorev10,
             vrubrainv51,
             vrubrainv52,
             bebop2,
             disco,
-            solo
+            solo,
+            revomini,
+            mindpxv2,
+            minipix,
+            chbootloader
         }
 
+        public static string chbootloader = "";
+   
         /// <summary>
         /// Detect board version
         /// </summary>
@@ -50,11 +59,140 @@ namespace MissionPlanner.Utilities
 
             if (!MainV2.MONO)
             {
+                try
+                {
+                    // check the device reported productname
+                    var ports = Win32DeviceMgmt.GetAllCOMPorts();
+
+                    foreach (var item in ports)
+                    {
+                        log.InfoFormat("{0}: {1} - {2}", item.name, item.description, item.board);
+
+                        //if (port.ToLower() == item.name.ToLower())
+                        {
+                            //USB\VID_0483&PID_DF11   -- stm32 bootloader
+                            //USB\VID_1209&PID_5740   -- ardupilot chibios
+
+                            // new style bootloader
+                            if (item.hardwareid.StartsWith(@"USB\VID_0483&PID_5740") ||
+                                item.hardwareid.StartsWith(@"USB\VID_2DAE&PID_1001") ||
+                                item.hardwareid.StartsWith(@"USB\VID_2DAE&PID_1011") ||
+								Regex.IsMatch(item.hardwareid,"VID_2DAE&PID_10[0-1][0-9]") ||
+                                item.hardwareid.StartsWith(@"USB\VID_1209&PID_5740")) //USB\VID_0483&PID_5740&REV_0200)
+                            {
+                                if (item.board == "fmuv2" || item.board.ToLower() == "fmuv2-bl")
+                                {
+                                    log.Info("is a fmuv2");
+                                    return boards.px4v2;
+                                }
+                                if (item.board == "fmuv3" || item.board.ToLower() == "fmuv3-bl")
+                                {
+                                    log.Info("is a fmuv3");
+                                    return boards.px4v3;
+                                }
+                                if (item.board == "fmuv4" || item.board.ToLower() == "fmuv4-bl")
+                                {
+                                    log.Info("is a fmuv4");
+                                    return boards.px4v4;
+                                }
+                                if (item.board == "fmuv5" || item.board.ToLower() == "fmuv5-bl")
+                                {
+                                    log.Info("is a fmuv5");
+                                }
+                                if (item.board == "revo-mini" || item.board.ToLower() == "revo-mini-bl")
+                                {
+                                    log.Info("is a revo-mini");
+                                    //return boards.revomini;
+                                }
+                                if (item.board == "mini-pix" || item.board.ToLower() == "mini-pix-bl")
+                                {
+                                    log.Info("is a mini-pix");
+                                    //return boards.minipix;
+                                }
+                                if (item.board == "mindpx-v2" || item.board.ToLower() == "mindpx-v2-bl")
+                                {
+                                    log.Info("is a mindpx-v2");
+                                    //return boards.mindpxv2;
+                                }
+
+                                chbootloader = item.board.Replace("-bl", "").Replace("-Bl", "").Replace("-BL", "");
+                                return boards.chbootloader;
+                            }
+
+                            // old style bootloader
+
+                            if (item.board == "PX4 FMU v5.x")
+                            {//USB\VID_26AC&PID_0032\0
+                                log.Info("is a PX4 FMU v5.x (fmuv5)");
+                                return boards.fmuv5;
+                            }
+
+                            if (item.board == "PX4 FMU v4.x")
+                            {
+                                log.Info("is a px4v4 pixracer");
+                                return boards.px4v4;
+                            }
+
+                            if (item.board == "PX4 FMU v2.x")
+                            {
+                                DateTime DEADLINE = DateTime.Now.AddSeconds(30);
+
+                                while (DateTime.Now < DEADLINE)
+                                {
+                                    string[] allports = SerialPort.GetPortNames();
+
+                                    foreach (string port1 in allports)
+                                    {
+                                        log.Info(DateTime.Now.Millisecond + " Trying Port " + port1);
+                                        try
+                                        {
+                                            using (var up = new Uploader(port1, 115200))
+                                            {
+                                                up.identify();
+                                                Console.WriteLine(
+                                                    "Found board type {0} boardrev {1} bl rev {2} fwmax {3} on {4}",
+                                                    up.board_type,
+                                                    up.board_rev, up.bl_rev, up.fw_maxsize, port1);
+
+                                                if (up.fw_maxsize == 2080768 && up.board_type == 9 && up.bl_rev >= 5)
+                                                {
+                                                    log.Info("is a px4v3");
+                                                    return boards.px4v3;
+                                                }
+                                                else
+                                                {
+                                                    log.Info("is a px4v2");
+                                                    return boards.px4v2;
+                                                }
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            log.Error(ex);
+                                        }
+                                    }
+                                }
+
+                                log.Info("Failed to detect px4 board type");
+                                return boards.none;
+                            }
+                        }
+                    }
+                } catch (Exception ex) { log.Error(ex); }
+
                 ObjectQuery query = new ObjectQuery("SELECT * FROM Win32_SerialPort"); // Win32_USBControllerDevice
                 ManagementObjectSearcher searcher = new ManagementObjectSearcher(query);
                 foreach (ManagementObject obj2 in searcher.Get())
                 {
-                    Console.WriteLine("PNPID: " + obj2.Properties["PNPDeviceID"].Value.ToString());
+                    log.InfoFormat("-----------------------------------");
+                    log.InfoFormat("Win32_USBDevice instance");
+                    log.InfoFormat("-----------------------------------");
+   
+                    foreach (var item in obj2.Properties)
+                    {
+                        log.InfoFormat("{0}: {1}", item.Name, item.Value);
+                    }
+
 
                     // check vid and pid
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_2341&PID_0010"))
@@ -77,39 +215,64 @@ namespace MissionPlanner.Utilities
                         }
                     }
 
-                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0011"))
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0032"))
+                    {
+                        // check port name as well
+                        //if (obj2.Properties["Name"].Value.ToString().ToUpper().Contains(serialPort.PortName.ToUpper()))
+                        {
+                            log.Info("is a CUAVv5");
+							chbootloader = "CUAVv5";
+                            return boards.chbootloader;
+                        }
+                    }
+
+                    // chibios or normal px4
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_0483&PID_5740") || 
+                        obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0011") ||
+                        obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_1209&PID_5740"))
                     {
                         CustomMessageBox.Show(Strings.PleaseUnplugTheBoardAnd);
 
-                        var DEADLINE = DateTime.Now.AddSeconds(30);
+                        DateTime DEADLINE = DateTime.Now.AddSeconds(30);
 
                         while (DateTime.Now < DEADLINE)
                         {
-                            try
-                            {
-                                using (var up = new Uploader(port, 115200))
-                                {
-                                    up.identify();
-                                    Console.WriteLine(
-                                        "Found board type {0} boardrev {1} bl rev {2} fwmax {3} on {4}",
-                                        up.board_type,
-                                        up.board_rev, up.bl_rev, up.fw_maxsize, port);
+                            string[] allports = SerialPort.GetPortNames();
 
-                                    if (up.fw_maxsize == 2080768 && up.board_type == 9)
+                            foreach (string port1 in allports)
+                            {
+                                log.Info(DateTime.Now.Millisecond + " Trying Port " + port1);
+                                try
+                                {
+                                    using (var up = new Uploader(port1, 115200))
                                     {
-                                        log.Info("is a px4v3");
-                                        return boards.px4v3;
-                                    }
-                                    else
-                                    {
-                                        log.Info("is a px4v2");
-                                        return boards.px4v2;
+                                        up.identify();
+                                        Console.WriteLine(
+                                            "Found board type {0} boardrev {1} bl rev {2} fwmax {3} on {4}",
+                                            up.board_type,
+                                            up.board_rev, up.bl_rev, up.fw_maxsize, port1);
+
+                                        if (up.fw_maxsize == 2080768 && up.board_type == 9 && up.bl_rev >= 5)
+                                        {
+                                            log.Info("is a px4v3");
+                                            return boards.px4v3;
+                                        }
+                                        else if (up.fw_maxsize == 2080768 && up.board_type == 50 && up.bl_rev >= 5)
+                                        {
+                                            log.Info("is a fmuv5");
+                                            return boards.fmuv5;
+                                        }
+                                        else
+                                        {
+                                            log.Info("is a px4v2");
+                                            return boards.px4v2;
+                                        }
                                     }
                                 }
-                            }
-                            catch (Exception ex)
-                            {
-                                log.Error(ex);
+                                catch (Exception ex)
+                                {
+                                    log.Error(ex);
+                                }
                             }
                         }
 
@@ -117,10 +280,22 @@ namespace MissionPlanner.Utilities
                         return boards.none;
                     }
 
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0021"))
+                    {
+                        log.Info("is a px4v3 X2.1");
+                        return boards.px4v3;
+                    }
+
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0012"))
                     {
                         log.Info("is a px4v4 pixracer");
                         return boards.px4v4;
+                    }
+
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0013"))
+                    {
+                        log.Info("is a px4v4pro pixhawk 3 pro");
+                        return boards.px4v4pro;
                     }
 
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0001"))
@@ -131,10 +306,7 @@ namespace MissionPlanner.Utilities
 
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0016"))
                     {
-                        log.Info("is a px4v2 bootloader");
-                        CustomMessageBox.Show(
-                            "You appear to have a bootloader with a bad PID value, please update your bootloader.");
-                        return boards.px4v2;
+                        return boards.px4rl;
                     }
 
                     //|| obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0012") || obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0013") || obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0014") || obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0015") || obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_26AC&PID_0016")
@@ -169,6 +341,12 @@ namespace MissionPlanner.Utilities
                         return boards.vrbrainv52;
                     }
 
+                    if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_27AC&PID_1154"))
+                    {
+                        log.Info("is a vrbrain 5.4 bootloader");
+                        return boards.vrbrainv54;
+                    }
+
                     if (obj2.Properties["PNPDeviceID"].Value.ToString().Contains(@"USB\VID_27AC&PID_1910"))
                     {
                         log.Info("is a vrbrain core 1.0 bootloader");
@@ -191,26 +369,26 @@ namespace MissionPlanner.Utilities
             else
             {
                 // if its mono
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
                 {
                     return boards.b2560v2;
                 }
                 else
                 {
-                    if (DialogResult.Yes ==
-                        CustomMessageBox.Show("Is this a PX4/PIXHAWK/PIXRACER?", "PX4/PIXHAWK", MessageBoxButtons.YesNo))
+                    if ((int)DialogResult.Yes ==
+                        CustomMessageBox.Show("Is this a CUBE/PX4/PIXHAWK/PIXRACER?", "PX4/PIXHAWK", MessageBoxButtons.YesNo))
                     {
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a PIXRACER?", "PIXRACER", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v4;
                         }
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a CUBE?", "CUBE", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v3;
                         }
-                        if (DialogResult.Yes ==
+                        if ((int)DialogResult.Yes ==
                             CustomMessageBox.Show("Is this a PIXHAWK?", "PIXHAWK", MessageBoxButtons.YesNo))
                         {
                             return boards.px4v2;
@@ -224,14 +402,14 @@ namespace MissionPlanner.Utilities
                 }
             }
 
-            if (DialogResult.Yes == CustomMessageBox.Show("Is this a Linux board?", "Linux", MessageBoxButtons.YesNo))
+            if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a Linux board?", "Linux", MessageBoxButtons.YesNo))
             {
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this Bebop2?", "Bebop2", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this Bebop2?", "Bebop2", MessageBoxButtons.YesNo))
                 {
                     return boards.bebop2;
                 }
 
-                if (DialogResult.Yes == CustomMessageBox.Show("Is this Disco?", "Disco", MessageBoxButtons.YesNo))
+                if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this Disco?", "Disco", MessageBoxButtons.YesNo))
                 {
                     return boards.disco;
                 }
@@ -345,16 +523,16 @@ namespace MissionPlanner.Utilities
             serialPort.Close();
             log.Warn("Not a 2560");
 
-            if (DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
+            if ((int)DialogResult.Yes == CustomMessageBox.Show("Is this a APM 2+?", "APM 2+", MessageBoxButtons.YesNo))
             {
                 return boards.b2560v2;
             }
             else
             {
-                if (DialogResult.Yes ==
+                if ((int)DialogResult.Yes ==
                     CustomMessageBox.Show("Is this a PX4/PIXHAWK?", "PX4/PIXHAWK", MessageBoxButtons.YesNo))
                 {
-                    if (DialogResult.Yes ==
+                    if ((int)DialogResult.Yes ==
                         CustomMessageBox.Show("Is this a PIXHAWK?", "PIXHAWK", MessageBoxButtons.YesNo))
                     {
                         return boards.px4v2;

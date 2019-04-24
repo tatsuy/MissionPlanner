@@ -1,9 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.InteropServices;
-using MissionPlanner.HIL;
 using uint8_t = System.Byte;
 using int8_t = System.SByte;
 using uint32_t = System.UInt32;
@@ -15,7 +12,7 @@ using int64_t = System.Int64;
 
 namespace MissionPlanner.Utilities
 {
-    public class AP_Terrain : HIL.Utils
+    public class AP_Terrain : Utils
     {
         private bool enable = true;
         private int32_t grid_spacing = 100;

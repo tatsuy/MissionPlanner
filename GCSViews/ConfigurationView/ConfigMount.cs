@@ -1,11 +1,11 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using MissionPlanner.ArduPilot;
 using MissionPlanner.Controls;
 using MissionPlanner.Models;
 using MissionPlanner.Utilities;
@@ -13,7 +13,7 @@ using Transitions;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigMount : UserControl, IActivate
+    public partial class ConfigMount : MyUserControl, IActivate
     {
         private readonly Transition _NoErrorTransition;
         private Transition[] _ErrorTransition;
@@ -40,7 +40,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             SetErrorMessageOpacity();
 
-            if (MainV2.comPort.MAV.cs.firmware == MainV2.Firmwares.ArduPlane)
+            if (MainV2.comPort.MAV.cs.firmware == Firmwares.ArduPlane)
             {
                 mavlinkComboBoxTilt.Items.AddRange(Enum.GetNames(typeof (Channelap)));
                 mavlinkComboBoxRoll.Items.AddRange(Enum.GetNames(typeof (Channelap)));
@@ -116,6 +116,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 Enabled = false;
                 return;
             }
+
+            startup = true;
 
             CMB_shuttertype.SelectedItem = Enum.GetName(typeof(ChannelCameraShutter),
                 (Int32)MainV2.comPort.MAV.param["CAM_TRIGG_TYPE"]);
@@ -421,6 +423,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 1,
             RC13 = 1,
             RC14 = 1,
+            SERVO1 = 1,
+            SERVO2 = 1,
+            SERVO3 = 1,
+            SERVO4 = 1,
             SERVO5 = 1,
             SERVO6 = 1,
             SERVO7 = 1,
@@ -447,6 +453,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 1,
             RC13 = 1,
             RC14 = 1,
+            SERVO1 = 1,
+            SERVO2 = 1,
+            SERVO3 = 1,
+            SERVO4 = 1,
             SERVO5 = 1,
             SERVO6 = 1,
             SERVO7 = 1,
@@ -472,6 +482,10 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             RC12 = 12,
             RC13 = 13,
             RC14 = 14,
+            SERVO1 = 1,
+            SERVO2 = 2,
+            SERVO3 = 3,
+            SERVO4 = 4,
             SERVO5 = 5,
             SERVO6 = 6,
             SERVO7 = 7,

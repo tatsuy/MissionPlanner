@@ -8,10 +8,11 @@ using System.Windows.Forms;
 
 
 using System.Drawing.Drawing2D;
+using SkiaSharp.Views.Desktop;
 
 namespace MissionPlanner.Controls
 {
-    public class MyButton : Button
+    public class MyButton : SkiaSharp.Views.Desktop.SKControl, IButtonControl
     {
         bool _mouseover = false;
         bool _mousedown = false;
@@ -50,6 +51,19 @@ namespace MissionPlanner.Controls
          [DefaultValue(typeof(Color), "0x79, 0x94, 0x29")]
          public Color Outline { get { return _Outline; } set { _Outline = value; this.Invalidate(); } }
 
+         public void NotifyDefault(bool value)
+         {
+            
+         }
+
+         public void PerformClick()
+         {
+             OnClick(new EventArgs());
+         }
+
+         public DialogResult DialogResult { get; set; } = DialogResult.None;
+        public bool UseVisualStyleBackColor { get; set; }
+
         public MyButton()
         {
             _BGGradTop = Color.FromArgb(0x94, 0xc1, 0x1f);
@@ -59,20 +73,23 @@ namespace MissionPlanner.Controls
             _ColorNotEnabled = Color.FromArgb(73, 0x2b, 0x3a, 0x03);
             _ColorMouseOver = Color.FromArgb(73, 0x2b, 0x3a, 0x03);
             _ColorMouseDown = Color.FromArgb(150, 0x2b, 0x3a, 0x03);
+
+            Size = new Size(75, 23);
+
+            PaintSurface += OnPaintSurface;
         }
 
-        protected override void OnPaint(PaintEventArgs pevent)
+        private void OnPaintSurface(object sender, SKPaintSurfaceEventArgs e)
         {
-            //base.OnPaint(pevent);
 
-            if (inOnPaint)
+            if (inOnPaint || !IsHandleCreated)
                 return;
 
             inOnPaint = true;
 
             try
             {
-                Graphics gr = pevent.Graphics;
+                var gr = new SkiaGraphics(e.Surface);
 
                 gr.Clear(this.BackColor);
 
@@ -106,7 +123,7 @@ namespace MissionPlanner.Controls
                 // bl
                 outline.AddArc(0, height - wid, wid, wid, 90, 90);
                 // left line
-                outline.AddLine(0, height - wid, 0, wid - wid /2);
+                outline.AddLine(0, height - wid, 0, wid - wid / 2);
 
 
                 gr.FillPath(linear, outline);
@@ -148,12 +165,18 @@ namespace MissionPlanner.Controls
                 gr.DrawString(display, this.Font, mybrush, outside, stringFormat);
             }
             catch { }
-            
+
             inOnPaint = false;
         }
 
         protected override void OnClick(EventArgs e)
         {
+            if (DialogResult != DialogResult.None)
+            {
+                var form = Parent.FindForm();
+                if(form != null)
+                    form.DialogResult = DialogResult;
+            }
             base.OnClick(e);
         }
 
@@ -166,24 +189,25 @@ namespace MissionPlanner.Controls
         {
             _mouseover = true;
             base.OnMouseEnter(e);
+            this.Invalidate();
         }
 
         protected override void OnMouseLeave(EventArgs e)
         {
             _mouseover = false;
-            base.OnMouseLeave(e);
+            base.OnMouseLeave(e); this.Invalidate();
         }
 
         protected override void OnMouseDown(MouseEventArgs mevent)
         {
             _mousedown = true;
-            base.OnMouseDown(mevent);
+            base.OnMouseDown(mevent); this.Invalidate();
         }
 
         protected override void OnMouseUp(MouseEventArgs mevent)
         {
             _mousedown = false;
-            base.OnMouseUp(mevent);
+            base.OnMouseUp(mevent); this.Invalidate();
         }
     }
 }

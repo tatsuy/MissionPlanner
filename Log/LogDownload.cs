@@ -1,25 +1,12 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
 using System.Reflection;
-using System.Text;
 using System.Windows.Forms;
-using System.IO.Ports;
 using System.IO;
 using System.Text.RegularExpressions;
-using KMLib;
-using KMLib.Feature;
-using KMLib.Geometry;
-using Core.Geometry;
-using ICSharpCode.SharpZipLib.Zip;
-using ICSharpCode.SharpZipLib.Checksums;
-using ICSharpCode.SharpZipLib.Core;
 using log4net;
 using MissionPlanner.Comms;
 using MissionPlanner.Utilities;
-
+using System.IO.Ports;
 
 namespace MissionPlanner.Log
 {
@@ -88,7 +75,7 @@ namespace MissionPlanner.Log
                 {
                     if (comPort.BytesToRead > 0)
                     {
-                        comPort_DataReceived((object) null, (SerialDataReceivedEventArgs) null);
+                        comPort_DataReceived((object) null, null);
                     }
                 }
                 catch
@@ -170,7 +157,7 @@ namespace MissionPlanner.Log
                             break;
                         while (comPort.BytesToRead >= 4)
                         {
-                            comPort_DataReceived((object) null, (SerialDataReceivedEventArgs) null);
+                            comPort_DataReceived((object) null, null);
                         }
                     }
                     catch (Exception ex)
@@ -225,7 +212,7 @@ namespace MissionPlanner.Log
             }
         }
 
-        void comPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
+        void comPort_DataReceived(object sender, object e)
         {
             try
             {
@@ -559,14 +546,13 @@ namespace MissionPlanner.Log
                         LogOutput lo = new LogOutput();
                         try
                         {
-                            TextReader tr = new StreamReader(logfile);
-
-                            while (tr.Peek() != -1)
+                            using (TextReader tr = new StreamReader(logfile))
                             {
-                                lo.processLine(tr.ReadLine());
+                                while (tr.Peek() != -1)
+                                {
+                                    lo.processLine(tr.ReadLine());
+                                }
                             }
-
-                            tr.Close();
                         }
                         catch (Exception ex)
                         {

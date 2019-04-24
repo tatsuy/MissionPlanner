@@ -14,10 +14,11 @@ using WebCamService;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigPlanner : UserControl, IActivate
+    public partial class ConfigPlanner : MyUserControl, IActivate
     {
         private List<CultureInfo> _languages;
         private bool startup;
+        static temp temp;
 
         public ConfigPlanner()
         {
@@ -51,18 +52,21 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             CMB_osdcolor.DataSource = Enum.GetNames(typeof (KnownColor));
 
             // set distance/speed unit states
-            CMB_distunits.DataSource = Enum.GetNames(typeof (Common.distances));
-            CMB_speedunits.DataSource = Enum.GetNames(typeof (Common.speeds));
+            CMB_distunits.DataSource = Enum.GetNames(typeof (distances));
+            CMB_speedunits.DataSource = Enum.GetNames(typeof (speeds));
+            CMB_altunits.DataSource = Enum.GetNames(typeof(altitudes));
 
             CMB_theme.DataSource = Enum.GetNames(typeof (ThemeManager.Themes));
 
             CMB_theme.Text = ThemeManager.CurrentTheme.ToString();
 
+            num_gcsid.Value = MAVLinkInterface.gcssysid;
+
             // setup language selection
             var cultureCodes = new[]
             {
                 "en-US", "zh-Hans", "zh-TW", "ru-RU", "Fr", "Pl", "it-IT", "es-ES", "de-DE", "ja-JP", "id-ID", "ko-KR",
-                "ar", "pt"
+                "ar", "pt", "tr", "ru-KZ"
             };
 
             _languages = cultureCodes
@@ -115,6 +119,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             SetCheckboxFromConfig("enableadsb", chk_ADSB);
             SetCheckboxFromConfig("norcreceiver", chk_norcreceiver);
             SetCheckboxFromConfig("showtfr", chk_tfr);
+            SetCheckboxFromConfig("autoParamCommit", CHK_AutoParamCommit);
+            SetCheckboxFromConfig("ShowNoFly", chk_shownofly);
 
             // this can't fail because it set at startup
             NUM_tracklength.Value = Settings.Instance.GetInt32("NUM_tracklength");
@@ -138,6 +144,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             SetCheckboxFromConfig("CHK_disttohomeflightdata", CHK_disttohomeflightdata);
 
+            CHK_AutoParamCommit.Visible = MainV2.DisplayConfiguration.displayParamCommitButton;
+
             //set hud color state
             var hudcolor = Settings.Instance["hudcolor"];
             if (hudcolor != null)
@@ -157,6 +165,8 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 CMB_distunits.Text = Settings.Instance["distunits"].ToString();
             if (Settings.Instance["speedunits"] != null)
                 CMB_speedunits.Text = Settings.Instance["speedunits"].ToString();
+            if (Settings.Instance["altunits"] != null)
+                CMB_altunits.Text = Settings.Instance["altunits"].ToString();
 
             try
             {
@@ -494,7 +504,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (startup)
                 return;
             Settings.Instance[((ComboBox) sender).Name] = ((ComboBox) sender).Text;
-            MainV2.comPort.MAV.cs.rateattitude = byte.Parse(((ComboBox) sender).Text);
+            MainV2.comPort.MAV.cs.rateattitude = int.Parse(((ComboBox) sender).Text);
+
+            CurrentState.rateattitudebackup = MainV2.comPort.MAV.cs.rateattitude;
 
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.EXTRA1, MainV2.comPort.MAV.cs.rateattitude);
             // request attitude
@@ -507,7 +519,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (startup)
                 return;
             Settings.Instance[((ComboBox) sender).Name] = ((ComboBox) sender).Text;
-            MainV2.comPort.MAV.cs.rateposition = byte.Parse(((ComboBox) sender).Text);
+            MainV2.comPort.MAV.cs.rateposition = int.Parse(((ComboBox) sender).Text);
+
+            CurrentState.ratepositionbackup = MainV2.comPort.MAV.cs.rateposition;
 
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.POSITION, MainV2.comPort.MAV.cs.rateposition);
             // request gps
@@ -518,7 +532,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (startup)
                 return;
             Settings.Instance[((ComboBox) sender).Name] = ((ComboBox) sender).Text;
-            MainV2.comPort.MAV.cs.ratestatus = byte.Parse(((ComboBox) sender).Text);
+            MainV2.comPort.MAV.cs.ratestatus = int.Parse(((ComboBox) sender).Text);
+
+            CurrentState.ratestatusbackup = MainV2.comPort.MAV.cs.ratestatus;
 
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.EXTENDED_STATUS, MainV2.comPort.MAV.cs.ratestatus);
             // mode
@@ -529,7 +545,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (startup)
                 return;
             Settings.Instance[((ComboBox) sender).Name] = ((ComboBox) sender).Text;
-            MainV2.comPort.MAV.cs.raterc = byte.Parse(((ComboBox) sender).Text);
+            MainV2.comPort.MAV.cs.raterc = int.Parse(((ComboBox) sender).Text);
+
+            CurrentState.ratercbackup = MainV2.comPort.MAV.cs.raterc;
 
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.RC_CHANNELS, MainV2.comPort.MAV.cs.raterc);
             // request rc info 
@@ -540,7 +558,9 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             if (startup)
                 return;
             Settings.Instance[((ComboBox) sender).Name] = ((ComboBox) sender).Text;
-            MainV2.comPort.MAV.cs.ratesensors = byte.Parse(((ComboBox) sender).Text);
+            MainV2.comPort.MAV.cs.ratesensors = int.Parse(((ComboBox) sender).Text);
+
+            CurrentState.ratesensorsbackup = MainV2.comPort.MAV.cs.ratesensors;
 
             MainV2.comPort.requestDatastream(MAVLink.MAV_DATA_STREAM.EXTRA3, MainV2.comPort.MAV.cs.ratesensors);
             // request extra stuff - tridge
@@ -581,7 +601,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                     InputBox.Show("Min Alt", "What altitude do you want to warn at? (relative to home)",
                         ref speechstring))
                     return;
-                Settings.Instance["speechaltheight"] = (double.Parse(speechstring)/CurrentState.multiplierdist).ToString();
+                Settings.Instance["speechaltheight"] = (double.Parse(speechstring)/CurrentState.multiplieralt).ToString();
                 // save as m
             }
         }
@@ -873,8 +893,24 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         private void chk_temp_CheckedChanged(object sender, EventArgs e)
         {
-            var temp = new temp();
-            temp.Show();
+            if (chk_temp.Checked)
+            {
+                temp = new temp();
+                temp.FormClosing += chk_temp_FormClosing;
+                temp.Show();
+            }
+            else
+            {
+                if (temp != null)
+                { 
+                    temp.Close();
+                }
+            }
+        }
+
+        private void chk_temp_FormClosing(object sender, EventArgs e)
+        {
+            chk_temp.Checked = false;
         }
 
         private void chk_norcreceiver_CheckedChanged(object sender, EventArgs e)
@@ -898,6 +934,30 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 MainV2.DisplayConfiguration = MainV2.DisplayConfiguration.Basic();
             }
             Settings.Instance["displayview"] = MainV2.DisplayConfiguration.ConvertToString();
+        }
+
+        private void CHK_AutoParamCommit_CheckedChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["autoParamCommit"] = CHK_AutoParamCommit.Checked.ToString();
+        }
+
+        private void chk_shownofly_CheckedChanged(object sender, EventArgs e)
+        {
+            Settings.Instance["ShowNoFly"] = chk_shownofly.Checked.ToString();
+        }
+
+        private void CMB_altunits_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (startup)
+                return;
+            Settings.Instance["altunits"] = CMB_altunits.Text;
+            MainV2.instance.ChangeUnits();
+        }
+
+        private void num_gcsid_ValueChanged(object sender, EventArgs e)
+        {
+            MAVLinkInterface.gcssysid = (byte) num_gcsid.Value;
+            Settings.Instance["gcsid"] = num_gcsid.Value.ToString();
         }
     }
 }

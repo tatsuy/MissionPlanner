@@ -1,13 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Drawing;
-using System.Data;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using System.IO;
-using System.Collections;
 using MissionPlanner.Utilities;
 
 namespace MissionPlanner.Controls.PreFlight
@@ -35,10 +30,10 @@ namespace MissionPlanner.Controls.PreFlight
         {
             InitializeComponent();
 
-            MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
-
             try
             {
+                MissionPlanner.Controls.PreFlight.CheckListItem.defaultsrc = MainV2.comPort.MAV.cs;
+
                 LoadConfig();
             }
             catch
@@ -189,7 +184,8 @@ namespace MissionPlanner.Controls.PreFlight
         {
             CheckListEditor form = new CheckListEditor(this);
             form.Show();
-            rowcount = 0;
+            lock (this.CheckListItems)
+                rowcount = 0;
         }
 
         private void timer1_Tick(object sender, EventArgs e)

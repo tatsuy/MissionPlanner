@@ -1,20 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections;
-using System.ComponentModel;
-using System.Data;
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
-using System.IO.Ports;
 using System.IO;
-using System.Text.RegularExpressions;
-//using KMLib;
-//using KMLib.Feature;
-//using KMLib.Geometry;
-//using Core.Geometry;
 using ICSharpCode.SharpZipLib.Zip;
-using ICSharpCode.SharpZipLib.Checksums;
 using ICSharpCode.SharpZipLib.Core;
 using SharpKml.Base;
 using SharpKml.Dom;
@@ -25,7 +16,8 @@ using log4net;
 using ZedGraph; // Graphs
 using MissionPlanner.Utilities;
 using System.CodeDom.Compiler;
-using MissionPlanner;
+using System.Linq;
+using System.Text.RegularExpressions;
 using MissionPlanner.Controls;
 
 namespace MissionPlanner.Log
@@ -34,8 +26,6 @@ namespace MissionPlanner.Log
     {
         private static readonly ILog log =
             LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
-
-        List<CurrentState> flightdata = new List<CurrentState>();
 
         List<string> selection = new List<string>();
         List<string> options = new List<string>();
@@ -52,6 +42,7 @@ namespace MissionPlanner.Log
             InitializeComponent();
 
             zg1.GraphPane.YAxis.Title.IsVisible = false;
+            zg1.GraphPane.Y2Axis.Title.Text = "";
             zg1.GraphPane.Title.IsVisible = true;
             zg1.GraphPane.Title.Text = "Mavlink Log Graph";
             zg1.GraphPane.XAxis.Title.Text = "Time (sec)";
@@ -65,7 +56,7 @@ namespace MissionPlanner.Log
             MissionPlanner.Utilities.Tracking.AddPage(this.GetType().ToString(), this.Text);
         }
 
-        private void writeKML(string filename, double basealt = 0)
+        private void writeKML(string filename, Dictionary<int, List<CurrentState>> flightdatas, double basealt = 0)
         {
             SharpKml.Dom.AltitudeMode altmode = SharpKml.Dom.AltitudeMode.Absolute;
 
@@ -76,9 +67,6 @@ namespace MissionPlanner.Log
             };
 
             Document kml = new Document();
-
-            Tour tour = new Tour() {Name = "First Person View"};
-            Playlist tourplaylist = new Playlist();
 
             AddNamespace(kml, "gx", "http://www.google.com/kml/ext/2.2");
 
@@ -107,153 +95,162 @@ namespace MissionPlanner.Log
 
             kml.AddStyle(stylet);
 
-            // create sub folders
-            Folder planes = new Folder();
-            planes.Name = "Models";
-            kml.AddFeature(planes);
-
-            Folder points = new Folder();
-            points.Name = "Points";
-            kml.AddFeature(points);
-
-            // coords for line string
-            CoordinateCollection coords = new CoordinateCollection();
-
-            int a = 1;
-            int c = -1;
-            DateTime lasttime = DateTime.MaxValue;
-            DateTime starttime = DateTime.MinValue;
-            Color stylecolor = Color.AliceBlue;
-            string mode = "";
-            if (flightdata.Count > 0)
+            foreach (var flightdatai in flightdatas)
             {
-                mode = flightdata[0].mode;
-            }
-            foreach (CurrentState cs in flightdata)
-            {
-                progressBar1.Value = 50 + (int) ((float) a/(float) flightdata.Count*100.0f/2.0f);
-                progressBar1.Refresh();
+                var sysid = flightdatai.Key;
+                var flightdata = flightdatai.Value;
 
-                if (starttime == DateTime.MinValue)
+                Tour tour = new Tour() { Name = "First Person View" };
+                Playlist tourplaylist = new Playlist();
+
+                // create sub folders
+                Folder planes = new Folder();
+                planes.Name = "Models " + sysid;
+                kml.AddFeature(planes);
+
+                Folder points = new Folder();
+                points.Name = "Points " + sysid;
+                kml.AddFeature(points);
+
+                // coords for line string
+                CoordinateCollection coords = new CoordinateCollection();
+
+                int a = 1;
+                int c = -1;
+                DateTime lasttime = DateTime.MaxValue;
+                DateTime starttime = DateTime.MinValue;
+                Color stylecolor = Color.AliceBlue;
+                string mode = "";
+                if (flightdata.Count > 0)
                 {
-                    starttime = cs.datetime;
-                    lasttime = cs.datetime;
+                    mode = flightdata[0].mode;
                 }
 
-                if (mode != cs.mode || flightdata.Count == a)
+                foreach (CurrentState cs in flightdata)
                 {
-                    c++;
+                    progressBar1.Value = 50 + (int) ((float) a / (float) flightdata.Count * 100.0f / 2.0f);
+                    progressBar1.Refresh();
 
-                    LineString ls = new LineString();
-                    ls.AltitudeMode = altmode;
-                    ls.Extrude = true;
+                    if (starttime == DateTime.MinValue)
+                    {
+                        starttime = cs.datetime;
+                        lasttime = cs.datetime;
+                    }
 
-                    ls.Coordinates = coords;
+                    if (mode != cs.mode || flightdata.Count == a)
+                    {
+                        c++;
 
-                    Placemark pm = new Placemark();
+                        LineString ls = new LineString();
+                        ls.AltitudeMode = altmode;
+                        ls.Extrude = true;
 
-                    pm.Name = c + " Flight Path " + mode;
-                    pm.StyleUrl = new Uri("#yellowLineGreenPoly", UriKind.Relative);
-                    pm.Geometry = ls;
+                        ls.Coordinates = coords;
 
-                    SharpKml.Dom.TimeSpan ts = new SharpKml.Dom.TimeSpan();
-                    ts.Begin = starttime;
-                    ts.End = cs.datetime;
+                        Placemark pm = new Placemark();
 
-                    pm.Time = ts;
+                        pm.Name = c + " Flight Path " + mode;
+                        pm.StyleUrl = new Uri("#yellowLineGreenPoly", UriKind.Relative);
+                        pm.Geometry = ls;
 
-                    // setup for next line
-                    mode = cs.mode;
-                    starttime = cs.datetime;
+                        SharpKml.Dom.TimeSpan ts = new SharpKml.Dom.TimeSpan();
+                        ts.Begin = starttime;
+                        ts.End = cs.datetime;
 
-                    stylecolor = colours[c%(colours.Length - 1)];
+                        pm.Time = ts;
 
-                    Style style2 = new Style();
-                    style2.Line = new LineStyle(new Color32(stylecolor), 4);
+                        // setup for next line
+                        mode = cs.mode;
+                        starttime = cs.datetime;
 
-                    pm.StyleSelector = style2;
+                        stylecolor = colours[c % (colours.Length - 1)];
 
-                    kml.AddFeature(pm);
+                        Style style2 = new Style();
+                        style2.Line = new LineStyle(new Color32(stylecolor), 4);
 
-                    coords = new CoordinateCollection();
-                }
+                        pm.StyleSelector = style2;
 
-                Vector location = new Vector(cs.lat, cs.lng, cs.altasl);
+                        kml.AddFeature(pm);
 
-                if (basealt != 0)
-                {
-                    location.Altitude = cs.alt + basealt;
-                    coords.Add(location);
-                }
-                else
-                {
-                    coords.Add(location);
-                }
+                        coords = new CoordinateCollection();
+                    }
 
-                SharpKml.Dom.Timestamp tstamp = new SharpKml.Dom.Timestamp();
-                tstamp.When = cs.datetime;
+                    Vector location = new Vector(cs.lat, cs.lng, cs.altasl);
 
-                FlyTo flyto = new FlyTo();
+                    if (basealt != 0)
+                    {
+                        location.Altitude = cs.alt + basealt;
+                        coords.Add(location);
+                    }
+                    else
+                    {
+                        coords.Add(location);
+                    }
 
-                flyto.Duration = (cs.datetime - lasttime).TotalMilliseconds/1000.0;
+                    SharpKml.Dom.Timestamp tstamp = new SharpKml.Dom.Timestamp();
+                    tstamp.When = cs.datetime;
 
-                flyto.Mode = FlyToMode.Smooth;
-                SharpKml.Dom.Camera cam = new SharpKml.Dom.Camera();
-                cam.AltitudeMode = altmode;
-                cam.Latitude = cs.lat;
-                cam.Longitude = cs.lng;
-                cam.Altitude = location.Altitude;
-                cam.Heading = cs.yaw;
-                cam.Roll = -cs.roll;
-                cam.Tilt = (90 - (cs.pitch*-1));
+                    FlyTo flyto = new FlyTo();
 
-                cam.GXTimePrimitive = tstamp;
+                    flyto.Duration = (cs.datetime - lasttime).TotalMilliseconds / 1000.0;
 
-                flyto.View = cam;
-                //if (Math.Abs(flyto.Duration.Value) > 0.1)
-                {
-                    tourplaylist.AddTourPrimitive(flyto);
-                    lasttime = cs.datetime;
-                }
+                    flyto.Mode = FlyToMode.Smooth;
+                    SharpKml.Dom.Camera cam = new SharpKml.Dom.Camera();
+                    cam.AltitudeMode = altmode;
+                    cam.Latitude = cs.lat;
+                    cam.Longitude = cs.lng;
+                    cam.Altitude = location.Altitude;
+                    cam.Heading = cs.yaw;
+                    cam.Roll = -cs.roll;
+                    cam.Tilt = (90 - (cs.pitch * -1));
+
+                    cam.GXTimePrimitive = tstamp;
+
+                    flyto.View = cam;
+                    //if (Math.Abs(flyto.Duration.Value) > 0.1)
+                    {
+                        tourplaylist.AddTourPrimitive(flyto);
+                        lasttime = cs.datetime;
+                    }
 
 
-                Placemark pmplane = new Placemark();
-                pmplane.Name = "Point " + a;
+                    Placemark pmplane = new Placemark();
+                    pmplane.Name = "Point " + a;
 
 
-                pmplane.Time = tstamp;
+                    pmplane.Time = tstamp;
 
-                pmplane.Visibility = false;
+                    pmplane.Visibility = false;
 
-                SharpKml.Dom.Location loc = new SharpKml.Dom.Location();
-                loc.Latitude = cs.lat;
-                loc.Longitude = cs.lng;
-                loc.Altitude = location.Altitude;
+                    SharpKml.Dom.Location loc = new SharpKml.Dom.Location();
+                    loc.Latitude = cs.lat;
+                    loc.Longitude = cs.lng;
+                    loc.Altitude = location.Altitude;
 
-                if (loc.Altitude < 0)
-                    loc.Altitude = 0.01;
+                    if (loc.Altitude < 0)
+                        loc.Altitude = 0.01;
 
-                SharpKml.Dom.Orientation ori = new SharpKml.Dom.Orientation();
-                ori.Heading = cs.yaw;
-                ori.Roll = -cs.roll;
-                ori.Tilt = -cs.pitch;
+                    SharpKml.Dom.Orientation ori = new SharpKml.Dom.Orientation();
+                    ori.Heading = cs.yaw;
+                    ori.Roll = -cs.roll;
+                    ori.Tilt = -cs.pitch;
 
-                SharpKml.Dom.Scale sca = new SharpKml.Dom.Scale();
+                    SharpKml.Dom.Scale sca = new SharpKml.Dom.Scale();
 
-                sca.X = 2;
-                sca.Y = 2;
-                sca.Z = 2;
+                    sca.X = 2;
+                    sca.Y = 2;
+                    sca.Z = 2;
 
-                Model model = new Model();
-                model.Location = loc;
-                model.Orientation = ori;
-                model.AltitudeMode = altmode;
-                model.Scale = sca;
+                    Model model = new Model();
+                    model.Location = loc;
+                    model.Orientation = ori;
+                    model.AltitudeMode = altmode;
+                    model.Scale = sca;
 
-                try
-                {
-                    Description desc = new Description();
-                    desc.Text = @"<![CDATA[
+                    try
+                    {
+                        Description desc = new Description();
+                        desc.Text = @"<![CDATA[
               <table>
                 <tr><td>Roll: " + model.Orientation.Roll.Value.ToString("0.00") + @" </td></tr>
                 <tr><td>Pitch: " + model.Orientation.Tilt.Value.ToString("0.00") + @" </td></tr>
@@ -262,46 +259,47 @@ namespace MissionPlanner.Log
               </table> ]]>";
 //            ]]>";
 
-                    pmplane.Description = desc;
+                        pmplane.Description = desc;
+                    }
+                    catch
+                    {
+                    }
+
+                    SharpKml.Dom.Link link = new SharpKml.Dom.Link();
+                    link.Href = new Uri("block_plane_0.dae", UriKind.Relative);
+
+                    model.Link = link;
+
+                    pmplane.Geometry = model;
+
+                    planes.AddFeature(pmplane);
+
+                    ///
+
+                    Placemark pmt = new Placemark();
+
+                    SharpKml.Dom.Point pnt = new SharpKml.Dom.Point();
+                    pnt.AltitudeMode = altmode;
+                    pnt.Coordinate = location;
+
+                    pmt.Name = "" + a;
+
+                    pmt.Description = pmplane.Description;
+
+                    pmt.Time = tstamp;
+
+                    pmt.Geometry = pnt;
+                    pmt.StyleUrl = new Uri("#track", UriKind.Relative);
+
+                    points.AddFeature(pmt);
+
+                    a++;
                 }
-                catch
-                {
-                }
 
-                SharpKml.Dom.Link link = new SharpKml.Dom.Link();
-                link.Href = new Uri("block_plane_0.dae", UriKind.Relative);
+                tour.Playlist = tourplaylist;
 
-                model.Link = link;
-
-                pmplane.Geometry = model;
-
-                planes.AddFeature(pmplane);
-
-                ///
-
-                Placemark pmt = new Placemark();
-
-                SharpKml.Dom.Point pnt = new SharpKml.Dom.Point();
-                pnt.AltitudeMode = altmode;
-                pnt.Coordinate = location;
-
-                pmt.Name = "" + a;
-
-                pmt.Description = pmplane.Description;
-
-                pmt.Time = tstamp;
-
-                pmt.Geometry = pnt;
-                pmt.StyleUrl = new Uri("#track", UriKind.Relative);
-
-                points.AddFeature(pmt);
-
-                a++;
+                kml.AddFeature(tour);
             }
-
-            tour.Playlist = tourplaylist;
-
-            kml.AddFeature(tour);
 
             Serializer serializer = new Serializer();
             serializer.Serialize(kml);
@@ -377,14 +375,7 @@ namespace MissionPlanner.Log
 
         private void Log_FormClosing(object sender, FormClosingEventArgs e)
         {
-            try
-            {
-                //   if (selectform != null)
-                //      selectform.Close();
-            }
-            catch
-            {
-            }
+
         }
 
         private void BUT_redokml_Click(object sender, EventArgs e)
@@ -432,16 +423,29 @@ namespace MissionPlanner.Log
                             mine.logreadmode = true;
                             mine.speechenabled = false;
 
-                            double oldlatlngsum = 0;
+                            bool newsample = false;
+                            int sysidsample = 0;
+                            int compidsample = 0;
+
+                            mine.OnPacketReceived += ((o, message) =>
+                            {
+                                if (message.msgid == (int) MAVLink.MAVLINK_MSG_ID.GLOBAL_POSITION_INT)
+                                {
+                                    newsample = true;
+                                    sysidsample = message.sysid;
+                                    compidsample = message.compid;
+                                }
+                            });
 
                             int appui = 0;
+                            Dictionary<int, List<CurrentState>> flightdataDictionary = new Dictionary<int, List<CurrentState>>();
 
                             while (mine.logplaybackfile.BaseStream.Position < mine.logplaybackfile.BaseStream.Length)
                             {
                                 int percent =
                                     (int)
-                                        ((float) mine.logplaybackfile.BaseStream.Position/
-                                         (float) mine.logplaybackfile.BaseStream.Length*100.0f);
+                                    ((float) mine.logplaybackfile.BaseStream.Position /
+                                     (float) mine.logplaybackfile.BaseStream.Length * 100.0f);
                                 if (progressBar1.Value != percent)
                                 {
                                     progressBar1.Value = percent;
@@ -452,8 +456,6 @@ namespace MissionPlanner.Log
 
                                 mine.MAV.cs.datetime = mine.lastlogread;
 
-                                mine.MAV.cs.UpdateCurrentSettings(null, true, mine);
-
                                 if (appui != DateTime.Now.Second)
                                 {
                                     // cant do entire app as mixes with flightdata timer
@@ -461,20 +463,20 @@ namespace MissionPlanner.Log
                                     appui = DateTime.Now.Second;
                                 }
 
-                                // ignore because of this Exception System.PlatformNotSupportedException: No voice installed on the system or none available with the current security setting.
-
-                                if ((mine.MAV.cs.lat + mine.MAV.cs.lng) != oldlatlngsum
-                                    && mine.MAV.cs.lat != 0 && mine.MAV.cs.lng != 0)
+                                foreach (var mav in mine.MAVlist)
                                 {
-                                    if (Math.Round(mine.MAV.cs.lat, 5) == 0 || Math.Round(mine.MAV.cs.lng, 5) == 0)
-                                        continue;
+                                    mav.cs.UpdateCurrentSettings(null, true, mine, mav);
+                                }
 
-                                    // Console.WriteLine(cs.lat + " " + cs.lng + " " + cs.alt + "   lah " + (float)(cs.lat + cs.lng) + "!=" + oldlatlngsum);
-                                    CurrentState cs2 = (CurrentState) mine.MAV.cs.Clone();
+                                if (newsample)
+                                {
+                                    newsample = false;
 
-                                    flightdata.Add(cs2);
+                                    if (!flightdataDictionary.ContainsKey(sysidsample))
+                                        flightdataDictionary[sysidsample] = new List<CurrentState>();
 
-                                    oldlatlngsum = (mine.MAV.cs.lat + mine.MAV.cs.lng);
+                                    flightdataDictionary[sysidsample]
+                                        .Add((CurrentState) mine.MAVlist[sysidsample, compidsample].cs.Clone());
                                 }
                             }
 
@@ -499,10 +501,12 @@ namespace MissionPlanner.Log
 
                             log.Info(mine.MAV.cs.firmware + " : " + logfile);
 
-                            writeGPX(logfile);
-                            writeKML(logfile + ".kml", double.Parse(basealtstring)/CurrentState.multiplierdist);
+                            foreach (var flightdata in flightdataDictionary)
+                            {
+                                writeGPX(logfile + "-" + flightdata.Key, flightdata.Value);
+                            }
 
-                            flightdata.Clear();
+                            writeKML(logfile + ".kml", flightdataDictionary, double.Parse(basealtstring)/CurrentState.multiplierdist);
 
                             progressBar1.Value = 100;
                         }
@@ -511,7 +515,7 @@ namespace MissionPlanner.Log
             }
         }
 
-        private void writeGPX(string filename)
+        private void writeGPX(string filename, List<CurrentState> flightdata)
         {
             System.Xml.XmlTextWriter xw =
                 new System.Xml.XmlTextWriter(
@@ -1260,53 +1264,6 @@ namespace MissionPlanner.Log
             }
         }
 
-        private void AddDataOption(Form selectform, string Name)
-        {
-            CheckBox chk_box = new CheckBox();
-
-            log.Info("Add Option " + Name);
-
-            chk_box.Text = Name;
-            chk_box.Name = Name;
-            chk_box.Location = new System.Drawing.Point(x, y);
-            chk_box.Size = new System.Drawing.Size(100, 20);
-            chk_box.CheckedChanged += new EventHandler(chk_box_CheckedChanged);
-            chk_box.MouseUp += new MouseEventHandler(chk_box_MouseUp);
-
-            selectform.Controls.Add(chk_box);
-
-            Application.DoEvents();
-
-            x += 0;
-            y += 20;
-
-            if (y > selectform.Height - 60)
-            {
-                x += 100;
-                y = 10;
-
-                selectform.Width = x + 100;
-            }
-        }
-
-        void chk_box_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                // dont action a already draw item
-                if (!((CheckBox) sender).Checked)
-                {
-                    rightclick = true;
-                    ((CheckBox) sender).Checked = true;
-                }
-                else
-                {
-                    ((CheckBox) sender).Checked = false;
-                }
-                rightclick = false;
-            }
-        }
-
         int colorStep = 0;
         bool rightclick = false;
 
@@ -1325,6 +1282,47 @@ namespace MissionPlanner.Log
                 myCurve = zg1.GraphPane.AddCurve(((CheckBox) sender).Name.Replace("mavlink_", ""),
                     (PointPairList) datappl[((CheckBox) sender).Name],
                     Color.FromArgb(unchecked(colorvalue + (int) 0xff000000)), SymbolType.None);
+
+                var split = ((CheckBox) sender).Name.Split(' ');
+
+                if (split.Length == 2)
+                {
+                    var unit = MAVLink.GetUnit(split[0],
+                        name: split[1].Replace("mavlink_", "").RemoveFromEnd("_t").ToUpper());
+
+                    var index = zg1.GraphPane.YAxisList.IndexOf(unit);
+
+                    var index2 = zg1.GraphPane.Y2AxisList.IndexOf(unit);
+
+                    if (index != -1 && !rightclick)
+                    {
+                        myCurve.YAxisIndex = index;
+                        myCurve.GetYAxis(zg1.GraphPane).IsVisible = true;
+                    }
+                    else if (index2 != -1 && rightclick)
+                    {
+                        myCurve.YAxisIndex = index2;
+                        myCurve.GetYAxis(zg1.GraphPane).IsVisible = true;
+                    }
+                    else
+                    {
+                        if (rightclick)
+                        {
+                            index = zg1.GraphPane.AddY2Axis(unit);
+                            myCurve.YAxisIndex = index;
+                        }
+                        else
+                        {
+                            index = zg1.GraphPane.AddYAxis(unit);
+                            myCurve.YAxisIndex = index;
+                        }
+                    }
+
+                }
+                else
+                {
+                    myCurve.YAxisIndex = 0;
+                }
 
                 myCurve.Tag = ((CheckBox) sender).Name;
 
@@ -1345,10 +1343,9 @@ namespace MissionPlanner.Log
 
                 myCurve.GetRange(out xMin, out xMax, out yMin, out yMax, true, false, zg1.GraphPane);
 
-                if (rightclick || (yMin > 850 && yMax < 2100 && yMin < 2100))
+                if (rightclick)
                 {
                     myCurve.IsY2Axis = true;
-                    myCurve.YAxisIndex = 0;
                     zg1.GraphPane.Y2Axis.IsVisible = true;
 
                     myCurve.Label.Text = myCurve.Label.Text + "-R";
@@ -1464,7 +1461,7 @@ namespace MissionPlanner.Log
 
                                 MAVLink.MAVLinkMessage packet = mine.readPacket();
                                 string text = "";
-                                mine.DebugPacket(packet, ref text, true, ",");
+                                mine.DebugPacket(packet, ref text, false, ",");
 
                                 if (!String.IsNullOrEmpty(text))
                                     sw.Write(mine.lastlogread.ToString("yyyy-MM-ddTHH:mm:ss.fff") + "," + text);
@@ -1722,7 +1719,7 @@ namespace MissionPlanner.Log
 
         private void BUT_matlab_Click(object sender, EventArgs e)
         {
-            MissionPlanner.Log.MatLab.ProcessTLog();
+            MatLabForms.ProcessTLog();
         }
 
         private void treeView1_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
@@ -1737,6 +1734,16 @@ namespace MissionPlanner.Log
 
                 if (e.Node.Checked)
                 {
+                    // has it already been graphed?
+                    foreach (var item in zg1.GraphPane.CurveList)
+                    {
+                        if (item.Label.Text.StartsWith(e.Node.Text) &&
+                            item.Label.Text.Contains(e.Node.Parent.Text.ToLower()))
+                        {
+                            return;
+                        }
+                    }
+
                     if (e.Button == System.Windows.Forms.MouseButtons.Right)
                     {
                         GraphItem(e.Node.Parent.Text, e.Node.Text, false);
@@ -1749,7 +1756,8 @@ namespace MissionPlanner.Log
                 else
                 {
                     List<CurveItem> removeitems = new List<CurveItem>();
-
+                    List<Axis> visibleAxises = new List<Axis>();
+                    // tag line for removal
                     foreach (var item in zg1.GraphPane.CurveList)
                     {
                         if (item.Label.Text.StartsWith(e.Node.Text) &&
@@ -1758,10 +1766,27 @@ namespace MissionPlanner.Log
                             removeitems.Add(item);
                             //break;
                         }
+                        else
+                        {
+                            visibleAxises.Add(item.GetYAxis(zg1.GraphPane));
+                        }
                     }
-
+                    // remove lines
                     foreach (var item in removeitems)
+                    {
                         zg1.GraphPane.CurveList.Remove(item);
+                    }
+                    // hide unused yaxis
+                    foreach (var item in zg1.GraphPane.YAxisList)
+                    {
+                        if (!visibleAxises.Contains(item))
+                            item.IsVisible = false;
+                    }
+                    foreach (var item in zg1.GraphPane.Y2AxisList)
+                    {
+                        if (!visibleAxises.Contains(item))
+                            item.IsVisible = false;
+                    }
                 }
 
                 zg1.Invalidate();

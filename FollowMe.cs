@@ -1,16 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 using MissionPlanner.Comms;
 using System.Globalization;
 using MissionPlanner.Controls;
 using MissionPlanner.Utilities;
 using System.IO;
+using MissionPlanner.ArduPilot;
 
 namespace MissionPlanner
 {
@@ -89,7 +84,7 @@ namespace MissionPlanner
 
                 string alt = "100";
 
-                if (MainV2.comPort.MAV.cs.firmware == MainV2.Firmwares.ArduCopter2)
+                if (MainV2.comPort.MAV.cs.firmware == Firmwares.ArduCopter2)
                 {
                     alt = (10*CurrentState.multiplierdist).ToString("0");
                 }
@@ -124,7 +119,7 @@ namespace MissionPlanner
         {
             DateTime nextsend = DateTime.Now;
 
-            StreamWriter sw = new StreamWriter(File.OpenWrite("followmeraw.txt"));
+            StreamWriter sw = new StreamWriter(File.OpenWrite( Settings.GetUserDataDirectory() + "followmeraw.txt"));
 
             threadrun = true;
             while (threadrun)
@@ -140,7 +135,7 @@ namespace MissionPlanner
                     {
                         string[] items = line.Trim().Split(',', '*');
 
-                        if (items[15] != GetChecksum(line.Trim()))
+                        if (items[items.Length-1] != GetChecksum(line.Trim()))
                         {
                             Console.WriteLine("Bad Nmea line " + items[15] + " vs " + GetChecksum(line.Trim()));
                             continue;

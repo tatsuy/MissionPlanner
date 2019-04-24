@@ -6,7 +6,7 @@ using MissionPlanner.Utilities;
 
 namespace MissionPlanner.GCSViews.ConfigurationView
 {
-    public partial class ConfigBatteryMonitoring : UserControl, IActivate, IDeactivate
+    public partial class ConfigBatteryMonitoring : MyUserControl, IActivate, IDeactivate
     {
         private bool startup;
 
@@ -24,25 +24,19 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             }
 
             startup = true;
-            if (MainV2.comPort.MAV.param["BATT_MONITOR"] != null)
-            {
-                if ((float) MainV2.comPort.MAV.param["BATT_MONITOR"] != 0)
-                {
-                    CMB_batmontype.SelectedIndex = getIndex(CMB_batmontype,
-                        (int) float.Parse(MainV2.comPort.MAV.param["BATT_MONITOR"].ToString()));
-                }
-                else
-                {
-                    CMB_batmontype.SelectedIndex = 0;
-                }
-            }
 
+            CMB_batmontype.setup(
+                ParameterMetaDataRepository.GetParameterOptionsInt("BATT_MONITOR",
+                    MainV2.comPort.MAV.cs.firmware.ToString()), "BATT_MONITOR", MainV2.comPort.MAV.param);
+            
             if (MainV2.comPort.MAV.param["BATT_CAPACITY"] != null)
                 TXT_battcapacity.Text = MainV2.comPort.MAV.param["BATT_CAPACITY"].ToString();
 
             TXT_voltage.Text = MainV2.comPort.MAV.cs.battery_voltage.ToString();
             TXT_measuredvoltage.Text = TXT_voltage.Text;
 
+            if (MainV2.comPort.MAV.param["BATT_AMP_PERVLT"] != null)
+                TXT_ampspervolt.Text = MainV2.comPort.MAV.param["BATT_AMP_PERVLT"].ToString();
             // new
             if (MainV2.comPort.MAV.param["BATT_VOLT_MULT"] != null)
                 TXT_divider.Text = MainV2.comPort.MAV.param["BATT_VOLT_MULT"].ToString();
@@ -65,6 +59,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 CHK_speechbattery.Checked = false;
             }
 
+            //http://plane.ardupilot.com/wiki/common-pixhawk-overview/#pixhawk_analog_input_pins_virtual_pin_firmware_mapped_pin_id
             // determine the sensor type
             if (TXT_ampspervolt.Text == (13.6612).ToString() && TXT_divider.Text == (4.127115).ToString())
             {
@@ -85,6 +80,14 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             else if (TXT_ampspervolt.Text == (17).ToString() && TXT_divider.Text == (12.02).ToString())
             {
                 CMB_batmonsensortype.SelectedIndex = 5;
+            }
+            else if (TXT_ampspervolt.Text == (24).ToString() && TXT_divider.Text == (18).ToString())
+            {
+                CMB_batmonsensortype.SelectedIndex = 8;
+            }
+            else if (TXT_ampspervolt.Text == (36.364).ToString() && TXT_divider.Text == (18.182).ToString())
+            {
+                CMB_batmonsensortype.SelectedIndex = 9;
             }
             else
             {
@@ -154,35 +157,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             timer1.Stop();
             startup = true;
         }
-
-        private void CHK_enablebattmon_CheckedChanged(object sender, EventArgs e)
-        {
-            if (startup)
-                return;
-            try
-            {
-                if (((CheckBox) sender).Checked == false)
-                {
-                    CMB_batmontype.SelectedIndex = 0;
-                }
-                else
-                {
-                    if (CMB_batmontype.SelectedIndex <= 0)
-                        CMB_batmontype.SelectedIndex = 1;
-                }
-            }
-            catch
-            {
-                CustomMessageBox.Show("Set BATT_MONITOR Failed", Strings.ERROR);
-            }
-        }
-
-        private void TXT_battcapacity_Validating(object sender, CancelEventArgs e)
-        {
-            float ans = 0;
-            e.Cancel = !float.TryParse(TXT_battcapacity.Text, out ans);
-        }
-
+        
         private void TXT_battcapacity_Validated(object sender, EventArgs e)
         {
             if (startup || ((TextBox) sender).Enabled == false)
@@ -216,7 +191,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 }
                 else
                 {
-                    var selection = int.Parse(CMB_batmontype.Text.Substring(0, 1));
+                    var selection = (int)CMB_batmontype.SelectedValue;
 
                     CMB_batmonsensortype.Enabled = true;
 
@@ -324,7 +299,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 return;
             try
             {
-                MainV2.comPort.setParam(new[] {"AMP_PER_VOLT", "BATT_AMP_PERVOLT"}, float.Parse(TXT_ampspervolt.Text));
+                MainV2.comPort.setParam(new[] {"AMP_PER_VOLT", "BATT_AMP_PERVOLT", "BATT_AMP_PERVLT" }, float.Parse(TXT_ampspervolt.Text));
             }
             catch
             {
@@ -405,6 +380,16 @@ namespace MissionPlanner.GCSViews.ConfigurationView
                 TXT_divider.Text = (12.02).ToString();
                 TXT_ampspervolt.Text = (39.877).ToString();
             }
+            else if (selection == 8) // pixhack
+            {
+                TXT_divider.Text = (18).ToString();
+                TXT_ampspervolt.Text = (24).ToString();
+            }
+            else if (selection == 9) // Holybro Pixhawk4
+            {
+                TXT_divider.Text = (18.182).ToString();
+                TXT_ampspervolt.Text = (36.364).ToString();
+            }
 
             // enable to update
             TXT_divider.Enabled = true;
@@ -445,7 +430,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            TXT_voltage.Text = MainV2.comPort.MAV.cs._battery_voltage.ToString();
+            TXT_voltage.Text = MainV2.comPort.MAV.cs.battery_voltage.ToString();
             txt_current.Text = MainV2.comPort.MAV.cs.current.ToString();
         }
 
@@ -599,7 +584,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
 
             try
             {
-                MainV2.comPort.setParam(new[] {"AMP_PER_VOLT", "BATT_AMP_PERVOLT"}, float.Parse(TXT_ampspervolt.Text));
+                MainV2.comPort.setParam(new[] {"AMP_PER_VOLT", "BATT_AMP_PERVOLT", "BATT_AMP_PERVLT" }, float.Parse(TXT_ampspervolt.Text));
             }
             catch
             {

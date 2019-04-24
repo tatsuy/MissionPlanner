@@ -1,14 +1,13 @@
 ﻿using GMap.NET.WindowsForms;
-using GMap.NET.WindowsForms.Markers;
 using MissionPlanner.Controls;
 using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using MissionPlanner.Maps;
 
 namespace MissionPlanner.Utilities
 {

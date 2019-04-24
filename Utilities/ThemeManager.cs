@@ -5,7 +5,8 @@ using MissionPlanner.Controls.BackstageView;
 using log4net;
 using MissionPlanner.Controls;
 using System.IO;
-using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using BrightIdeasSoftware;
 
 namespace MissionPlanner.Utilities
@@ -127,106 +128,66 @@ namespace MissionPlanner.Utilities
 
         public static void doxamlgen()
         {
-            List<Control> temp = new List<Control>();
+            var asm = Assembly.GetExecutingAssembly();
 
-            temp.Add(new GCSViews.FlightData());
-            temp.Add(new GCSViews.FlightPlanner());
-            temp.Add(new GCSViews.Help());
-            temp.Add(new GCSViews.InitialSetup());
-            temp.Add(new GCSViews.SoftwareConfig());
-            temp.Add(new GCSViews.Terminal());
+            var temp = asm.GetTypes().Select(a =>
+            {
+                if (a.IsSubclassOf(typeof(Control)))
+                {
+                    try
+                    {
+                        return (Control) Activator.CreateInstance(a);
+                    }
+                    catch { }
+                }
 
-            temp.Add(new ConnectionControl());
-            temp.Add(new ConnectionStats());
-            temp.Add(new MavlinkCheckBox());
-            temp.Add(new MavlinkComboBox());
-            //temp.Add(new MavlinkNumericUpDown());
-            temp.Add(new ModifyandSet());
-            temp.Add(new ServoOptions());
-            temp.Add(new ThemeColors());
-
-            temp.Add(new MissionPlanner.Controls.BackstageView.BackstageView());
-            temp.Add(new MissionPlanner.Controls.BackstageView.BackstageViewButton());
-            temp.Add(new MissionPlanner.Controls.BackstageView.BackStageViewMenuPanel());
-            temp.Add(new MissionPlanner.Controls.ConnectionControl());
-            temp.Add(new MissionPlanner.Controls.ConnectionStats());
-            temp.Add(new MissionPlanner.Controls.Coords());
-            temp.Add(new MissionPlanner.Controls.FileBrowse());
-            temp.Add(new MissionPlanner.Controls.FlashMessage());
-            temp.Add(new MissionPlanner.Controls.GradientBG());
-            temp.Add(new MissionPlanner.Controls.HorizontalProgressBar());
-            temp.Add(new MissionPlanner.Controls.HorizontalProgressBar2());
-            temp.Add(new MissionPlanner.Controls.HSI());
-            temp.Add(new MissionPlanner.Controls.HUD());
-            temp.Add(new MissionPlanner.Controls.ImageLabel());
-            temp.Add(new MissionPlanner.Controls.LabelWithPseudoOpacity());
-            temp.Add(new MissionPlanner.Controls.LineSeparator());
-
-            temp.Add(new MissionPlanner.Controls.MyButton());
-            temp.Add(new MissionPlanner.Controls.myGMAP());
-            temp.Add(new MissionPlanner.Controls.MyLabel());
-            temp.Add(new MissionPlanner.Controls.MyProgressBar());
-            temp.Add(new MissionPlanner.Controls.MyTrackBar());
-            temp.Add(new MissionPlanner.Controls.OpenGLtest());
-            temp.Add(new MissionPlanner.Controls.OptionForm());
-            temp.Add(new MissionPlanner.Controls.PictureBoxMouseOver());
-            temp.Add(new MissionPlanner.Controls.PictureBoxWithPseudoOpacity());
-            temp.Add(new MissionPlanner.Controls.ProgressReporterDialogue());
-            temp.Add(new MissionPlanner.Controls.ProgressStep());
-            temp.Add(new MissionPlanner.Controls.QuickView());
-            temp.Add(new MissionPlanner.Controls.RadialGradientBG());
-            temp.Add(new MissionPlanner.Controls.RangeControl());
-            temp.Add(new MissionPlanner.Controls.ServoOptions());
-            temp.Add(new MissionPlanner.Controls.ValuesControl());
-            temp.Add(new MissionPlanner.Controls.VerticalProgressBar());
-            temp.Add(new MissionPlanner.Controls.VerticalProgressBar2());
-
-
-            temp.Add(new Wizard._1Intro());
-            temp.Add(new Wizard._2FrameFW());
-            temp.Add(new Wizard._3ConnectAP());
-            temp.Add(new Wizard._4FrameType());
-            temp.Add(new Wizard._5AccelCalib());
-            temp.Add(new Wizard._6CompassCalib());
-            temp.Add(new Wizard._7BatteryMonitor());
-            temp.Add(new Wizard._8OptionalItemsAC());
-            temp.Add(new Wizard._9RadioCalibration());
-            temp.Add(new Wizard._10FlightModes());
-            temp.Add(new Wizard._11Verify());
-            temp.Add(new Wizard._12FailSafe());
-            temp.Add(new Wizard._13GeoFence());
-            temp.Add(new Wizard._98DontForget());
-
-            temp.Add(new GCSViews.ConfigurationView.ConfigAC_Fence());
-            temp.Add(new GCSViews.ConfigurationView.ConfigArducopter());
-            temp.Add(new GCSViews.ConfigurationView.ConfigArduplane());
-            temp.Add(new GCSViews.ConfigurationView.ConfigArdurover());
-            temp.Add(new GCSViews.ConfigurationView.ConfigAteryx());
-            temp.Add(new GCSViews.ConfigurationView.ConfigAteryxSensors());
-            temp.Add(new GCSViews.ConfigurationView.ConfigBatteryMonitoring());
-            temp.Add(new GCSViews.ConfigurationView.ConfigFailSafe());
-            temp.Add(new GCSViews.ConfigurationView.ConfigFirmwareDisabled());
-            temp.Add(new GCSViews.ConfigurationView.ConfigFlightModes());
-            temp.Add(new GCSViews.ConfigurationView.ConfigFrameType());
-            temp.Add(new GCSViews.ConfigurationView.ConfigFriendlyParams());
-            temp.Add(new GCSViews.ConfigurationView.ConfigHWAirspeed());
-            temp.Add(new GCSViews.ConfigurationView.ConfigHWCompass());
-            temp.Add(new GCSViews.ConfigurationView.ConfigHWOptFlow());
-            temp.Add(new GCSViews.ConfigurationView.ConfigHWOSD());
-            temp.Add(new GCSViews.ConfigurationView.ConfigHWRangeFinder());
-            temp.Add(new GCSViews.ConfigurationView.ConfigMandatory());
-            temp.Add(new GCSViews.ConfigurationView.ConfigMount());
-            temp.Add(new GCSViews.ConfigurationView.ConfigOptional());
-            temp.Add(new GCSViews.ConfigurationView.ConfigPlanner());
-            temp.Add(new GCSViews.ConfigurationView.ConfigPlannerAdv());
-            temp.Add(new GCSViews.ConfigurationView.ConfigRadioInput());
-            temp.Add(new GCSViews.ConfigurationView.ConfigRawParams());
-            temp.Add(new GCSViews.ConfigurationView.ConfigSimplePids());
-            temp.Add(new GCSViews.ConfigurationView.ConfigTradHeli());
+                return null;
+            }).ToList();
 
             foreach (var ctl in temp)
             {
+                if(ctl == null)
+                    continue;
+
                 xaml(ctl);
+
+                html(ctl);
+            }
+        }
+
+        public static void html(Control control)
+        {
+            Type ty = control.GetType();
+
+            StreamWriter st = new StreamWriter(File.Open(ty.FullName + ".html", FileMode.Create));
+
+            dohtmlctls(control, st);
+
+            st.Close();
+        }
+
+        private static void dohtmlctls(Control control, StreamWriter st, int x=0, int y=0)
+        {
+            foreach (Control ctl in control.Controls)
+            {
+                var font = "font-family:" + ctl.Font.FontFamily + ";";
+                var fontsize = "font-size:" + ctl.Font.SizeInPoints + "pt;";
+                var fontcol = "color:" + System.Drawing.ColorTranslator.ToHtml(ctl.ForeColor) + ";";
+                var bgcol = "background-color:" + System.Drawing.ColorTranslator.ToHtml(ctl.BackColor) + ";";
+
+
+                st.WriteLine(@"<div class='" + ctl.GetType() + " " + ctl.Name + @"' " +
+                             "style='" + font + fontsize + fontcol + bgcol +
+                             "overflow:hidden;position: absolute; top: " + (y + ctl.Location.Y) + "; left: " +
+                             (x + ctl.Location.X) + ";width:" + ctl.Width + ";height:" + ctl.Height + ";' >" +
+                             ctl.Text);
+
+                if (ctl.Controls.Count > 0)
+                {
+                    dohtmlctls(ctl, st, 0, 0);
+                }
+
+                st.WriteLine(@"</div>");
             }
         }
 
@@ -671,6 +632,8 @@ mc:Ignorable=""d""
 
                     dgv.ColumnHeadersDefaultCellStyle = hs;
                     dgv.RowHeadersDefaultCellStyle = hs;
+
+                    dgv.AlternatingRowsDefaultCellStyle.BackColor = BGColor;
                 }
                 else if (ctl.GetType() == typeof (CheckBox) || ctl.GetType() == typeof (MavlinkCheckBox))
                 {
@@ -869,43 +832,75 @@ mc:Ignorable=""d""
 
             foreach (Control ctl in temp.Controls)
             {
-                if (ctl.GetType() == typeof (Label))
+                if (ctl.GetType() == typeof(Label))
                 {
                     if (!(ctl.Tag is string && (string)ctl.Tag == "custom"))
                     {
                         ctl.ForeColor = TextColor;
                     }
                 }
-                else if (ctl.GetType() == typeof (TreeView))
+                else if (ctl.GetType() == typeof(QuickView))
+                {
+                    //set default QuickView item color to mix with background
+                    Color mix = Color.FromArgb(ThemeManager.BGColor.ToArgb() ^ 0xffffff);
+
+                    Controls.QuickView but = (QuickView)ctl;
+                    if (but.Name == "quickView6")
+                    {
+                        but.numberColor = Color.FromArgb((0 + mix.R) / 2, (255 + mix.G) / 2, (252 + mix.B) / 2);
+                    }
+                    else if (but.Name == "quickView5")
+                    {
+                        but.numberColor = Color.FromArgb((254 + mix.R) / 2, (254 + mix.G) / 2, (86 + mix.B) / 2);
+                    }
+                    else if (but.Name == "quickView4")
+                    {
+                        but.numberColor = Color.FromArgb((0 + mix.R) / 2, (255 + mix.G) / 2, (83 + mix.B) / 2);
+                    }
+                    else if (but.Name == "quickView3")
+                    {
+                        but.numberColor = Color.FromArgb((255 + mix.R) / 2, (96 + mix.G) / 2, (91 + mix.B) / 2);
+                    }
+                    else if (but.Name == "quickView2")
+                    {
+                        but.numberColor = Color.FromArgb((254 + mix.R) / 2, (132 + mix.G) / 2, (46 + mix.B) / 2);
+                    }
+                    else if (but.Name == "quickView1")
+                    {
+                        but.numberColor = Color.FromArgb((209 + mix.R) / 2, (151 + mix.G) / 2, (248 + mix.B) / 2);
+                    }
+                    //return;  //return removed to process all quickView controls
+                }
+                else if (ctl.GetType() == typeof(TreeView))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
-                    TreeView txtr = (TreeView) ctl;
+                    TreeView txtr = (TreeView)ctl;
                     txtr.LineColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (Panel))
+                else if (ctl.GetType() == typeof(Panel))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (GroupBox))
+                else if (ctl.GetType() == typeof(GroupBox))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (MyLabel))
+                else if (ctl.GetType() == typeof(MyLabel))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (Button))
+                else if (ctl.GetType() == typeof(Button))
                 {
                     ctl.ForeColor = Color.Black;
                     ctl.BackColor = ButBG;
                 }
-                else if (ctl.GetType() == typeof (MyButton))
+                else if (ctl.GetType() == typeof(MyButton))
                 {
-                    Controls.MyButton but = (MyButton) ctl;
+                    Controls.MyButton but = (MyButton)ctl;
                     but.BGGradTop = ButBG;
                     but.BGGradBot = ButBGBot;
                     but.TextColor = ButtonTextColor;
@@ -914,29 +909,29 @@ mc:Ignorable=""d""
                     but.ColorMouseOver = ColorMouseOver;
                     but.ColorNotEnabled = ColorNotEnabled;
                 }
-                else if (ctl.GetType() == typeof (TextBox))
+                else if (ctl.GetType() == typeof(TextBox))
                 {
                     ctl.BackColor = BGColorTextBox;             //sets the BG colour of text boxes to specified colour
                     ctl.ForeColor = TextColor;
-                    TextBox txt = (TextBox) ctl;
+                    TextBox txt = (TextBox)ctl;
                     txt.BorderStyle = BorderStyle.None;
                 }
-                else if (ctl.GetType() == typeof (DomainUpDown))
+                else if (ctl.GetType() == typeof(DomainUpDown))
                 {
                     ctl.BackColor = ControlBGColor;
                     ctl.ForeColor = TextColor;
-                    DomainUpDown txt = (DomainUpDown) ctl;
+                    DomainUpDown txt = (DomainUpDown)ctl;
                     txt.BorderStyle = BorderStyle.None;
                 }
-                else if (ctl.GetType() == typeof (GroupBox) || ctl.GetType() == typeof (UserControl) ||
-                         ctl.GetType() == typeof (DataTreeListView))
+                else if (ctl.GetType() == typeof(GroupBox) || ctl.GetType() == typeof(UserControl) ||
+                         ctl.GetType() == typeof(DataTreeListView))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (ZedGraph.ZedGraphControl))
+                else if (ctl.GetType() == typeof(ZedGraph.ZedGraphControl))
                 {
-                    var zg1 = (ZedGraph.ZedGraphControl) ctl;
+                    var zg1 = (ZedGraph.ZedGraphControl)ctl;
                     zg1.GraphPane.Chart.Fill = new ZedGraph.Fill(ZedGraphChartFill);
                     zg1.GraphPane.Fill = new ZedGraph.Fill(ZedGraphPaneFill);
 
@@ -967,31 +962,31 @@ mc:Ignorable=""d""
                     zg1.GraphPane.Legend.Fill = new ZedGraph.Fill(ZedGraphLegendFill);
                     zg1.GraphPane.Legend.FontSpec.FontColor = TextColor;
                 }
-                else if (ctl.GetType() == typeof (BSE.Windows.Forms.Panel) || ctl.GetType() == typeof (SplitterPanel))
+                else if (ctl.GetType() == typeof(BSE.Windows.Forms.Panel) || ctl.GetType() == typeof(SplitterPanel))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                 }
                 else if (ctl.GetType() == typeof(RadialGradientBG)) //not included in original burntkermit theme
                 {
-                //    var rbg = ctl as RadialGradientBG;
-                //    rbg.CenterColor = ControlBGColor;
-                //    rbg.OutsideColor = ButBG;
+                    //    var rbg = ctl as RadialGradientBG;
+                    //    rbg.CenterColor = ControlBGColor;
+                    //    rbg.OutsideColor = ButBG;
                 }
                 else if (ctl.GetType() == typeof(GradientBG))
                 {
-                //    var rbg = ctl as GradientBG;
-                //    rbg.CenterColor = ControlBGColor;
-                //    rbg.OutsideColor = ButBG;
+                    //    var rbg = ctl as GradientBG;
+                    //    rbg.CenterColor = ControlBGColor;
+                    //    rbg.OutsideColor = ButBG;
                 }
-                else if (ctl.GetType() == typeof (Form))
+                else if (ctl.GetType() == typeof(Form))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
                     if (Program.IconFile != null)
                         ((Form)ctl).Icon = Icon.FromHandle(((Bitmap)Program.IconFile).GetHicon());
                 }
-                else if (ctl.GetType() == typeof (RichTextBox))
+                else if (ctl.GetType() == typeof(RichTextBox))
                 {
                     if ((ctl.Name == "TXT_terminal") && !MainV2.TerminalTheming)
                     {
@@ -1008,30 +1003,30 @@ mc:Ignorable=""d""
                         txtr.BackColor = ControlBGColor;
                     }
                 }
-                else if (ctl.GetType() == typeof (CheckedListBox))
+                else if (ctl.GetType() == typeof(CheckedListBox))
                 {
                     ctl.BackColor = ControlBGColor;
                     ctl.ForeColor = TextColor;
-                    CheckedListBox txtr = (CheckedListBox) ctl;
+                    CheckedListBox txtr = (CheckedListBox)ctl;
                     txtr.BorderStyle = BorderStyle.None;
                 }
-                else if (ctl.GetType() == typeof (TabPage))
+                else if (ctl.GetType() == typeof(TabPage))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
-                    TabPage txtr = (TabPage) ctl;
+                    TabPage txtr = (TabPage)ctl;
                     txtr.BorderStyle = BorderStyle.None;
                 }
-                else if (ctl.GetType() == typeof (TabControl))
+                else if (ctl.GetType() == typeof(TabControl))
                 {
                     ctl.BackColor = BGColor;
                     ctl.ForeColor = TextColor;
-                    TabControl txtr = (TabControl) ctl;
+                    TabControl txtr = (TabControl)ctl;
                 }
-                else if (ctl.GetType() == typeof (DataGridView) || ctl.GetType() == typeof(MyDataGridView))
+                else if (ctl.GetType() == typeof(DataGridView) || ctl.GetType() == typeof(MyDataGridView))
                 {
                     ctl.ForeColor = TextColor;
-                    DataGridView dgv = (DataGridView) ctl;
+                    DataGridView dgv = (DataGridView)ctl;
                     dgv.EnableHeadersVisualStyles = false;
                     dgv.BorderStyle = BorderStyle.None;
                     dgv.BackgroundColor = BGColor;
@@ -1049,9 +1044,12 @@ mc:Ignorable=""d""
                     dgv.ColumnHeadersDefaultCellStyle = hs;
                     dgv.RowHeadersDefaultCellStyle = hs;
                 }
-                else if (ctl.GetType() == typeof (CheckBox) || ctl.GetType() == typeof (MavlinkCheckBox))
+                else if (ctl.GetType() == typeof(CheckBox) || ctl.GetType() == typeof(MavlinkCheckBox))
                 {
-                    ctl.BackColor = BGColor;
+                    if (!(ctl.Tag is string && (string)ctl.Tag == "custom"))
+                    {
+                        ctl.BackColor = BGColor;
+                    }
                     ctl.ForeColor = TextColor;
                     CheckBox CHK = (CheckBox) ctl;
                     // CHK.FlatStyle = FlatStyle.Flat;
@@ -1105,36 +1103,8 @@ mc:Ignorable=""d""
                     ((MyProgressBar)ctl).BGGradTop = ProgressBarColorTop;
                     ((MyProgressBar)ctl).BGGradBot = ProgressBarColorBot;
                     ((MyProgressBar)ctl).Outline = ProgressBarOutlineColor;        //sets the colour of the progress bar box
-                } else if (ctl.GetType() == typeof (QuickView))
-                {
-                    Controls.QuickView but = (QuickView) ctl;
-                    if (but.desc == "DistToMAV")
-                    {
-                        but.numberColor = Color.FromArgb(0, 255, 252);
-                    }
-                    else if (but.desc == "Vertical Speed (m/s)")
-                    {
-                        but.numberColor = Color.FromArgb(254, 254, 86);
-                    }
-                    else if (but.desc == "Yaw (deg)")
-                    {
-                        but.numberColor = Color.FromArgb(0, 255, 83);
-                    }
-                    else if (but.desc == "Dist to WP (m)")
-                    {
-                        but.numberColor = Color.FromArgb(255, 96, 91);
-                    }
-                    else if (but.desc == "GroundSpeed (m/s)")
-                    {
-                        but.numberColor = Color.FromArgb(254, 132, 46);
-                    }
-                    else if (but.desc == "Altitude (m)")
-                    {
-                        but.numberColor = Color.FromArgb(209, 151, 248);
-                    }
-                    return;
-                }
-                if (ctl.Controls.Count > 0)
+                } 
+                if ( (ctl.Controls.Count > 0) && (ctl.GetType() != typeof(QuickView)))      //Do not iterate into quickView type leave labels as they are
                     ApplyTheme(ctl, 1);
 
             }

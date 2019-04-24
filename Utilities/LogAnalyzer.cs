@@ -1,17 +1,12 @@
-using IronPython.Hosting;
 using log4net;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Windows.Forms;
 using System.Xml;
 using ICSharpCode.SharpZipLib.Zip;
-using Ionic.Zip;
 using MissionPlanner.Controls;
-using ZipFile = ICSharpCode.SharpZipLib.Zip.ZipFile;
 
 namespace MissionPlanner.Utilities
 {
@@ -44,13 +39,13 @@ namespace MissionPlanner.Utilities
                 bool gotit = false;
                 if (Environment.Is64BitOperatingSystem)
                 {
-                    gotit = Common.getFilefromNet(
+                    gotit = Download.getFilefromNet(
                         "http://firmware.ardupilot.org/Tools/MissionPlanner/LogAnalyzer/LogAnalyzer64.zip",
                         zip);
                 }
                 else
                 {
-                    gotit = Common.getFilefromNet(
+                    gotit = Download.getFilefromNet(
                         "http://firmware.ardupilot.org/Tools/MissionPlanner/LogAnalyzer/LogAnalyzer.zip",
                         zip);
                 }
