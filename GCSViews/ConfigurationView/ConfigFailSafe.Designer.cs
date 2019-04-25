@@ -263,7 +263,7 @@ namespace MissionPlanner.GCSViews.ConfigurationView
             0,
             65536});
             this.mavlinkNumericUpDownFS_BATT_MAH.Max = 99999F;
-            this.mavlinkNumericUpDownFS_BATT_MAH.Min = 1000F;
+            this.mavlinkNumericUpDownFS_BATT_MAH.Min = 0F;
             this.mavlinkNumericUpDownFS_BATT_MAH.Name = "mavlinkNumericUpDownFS_BATT_MAH";
             this.mavlinkNumericUpDownFS_BATT_MAH.ParamName = null;
             this.mavlinkNumericUpDownFS_BATT_MAH.Value = new decimal(new int[] {
