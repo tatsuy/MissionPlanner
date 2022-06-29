@@ -72,6 +72,8 @@
 <TileHeight>256</TileHeight>
 <MatrixWidth>1</MatrixWidth>
 <MatrixHeight>1</MatrixHeight>
+</TileMatrix>
+<TileMatrix>
 <ows:Identifier>1</ows:Identifier>
 <ScaleDenominator>139770566.0071794</ScaleDenominator>
 <TopLeftCorner>-20037508.34278925 20037508.34278925</TopLeftCorner>
