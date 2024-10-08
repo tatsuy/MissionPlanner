@@ -1478,7 +1478,13 @@ namespace MissionPlanner.GCSViews
                     // ホームポイントから最初のウェイポイントまでの3D距離を計算
                     if (wpCommandList.Any())
                     {
-                        double totalDistance3D = MissionEstimator.CalculateTotal3DDistance(home, wpCommandList);
+                        // double totalDistance = MissionEstimator.CalculateTotal3DDistance(home, wpCommandList);
+
+                        // ラベルに3D距離を表示
+                        //lbl_distance.Text = rm.GetString("lbl_distance.Text") + ": " +
+                        //        FormatDistance(totalDistance / 1000.0, false);
+
+                        double totalDistance3D = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList);
 
                         // ラベルに3D距離を表示
                         lbl_3d_distance.Text = rm.GetString("lbl_3d_distance.Text") + ": " +
