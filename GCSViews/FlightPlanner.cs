@@ -1484,11 +1484,14 @@ namespace MissionPlanner.GCSViews
                         //lbl_distance.Text = rm.GetString("lbl_distance.Text") + ": " +
                         //        FormatDistance(totalDistance / 1000.0, false);
 
-                        double totalDistance3D = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList);
+                        (double totalDistance3D, double estimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList, true, 60, 10, 2.5, 2.5);
 
                         // ラベルに3D距離を表示
                         lbl_3d_distance.Text = rm.GetString("lbl_3d_distance.Text") + ": " +
                                 FormatDistance(totalDistance3D / 1000.0, false);
+
+                        lbl_estimated_time.Text = rm.GetString("lbl_estimated_time.Text") + ": " +
+                                FormatFlightTime(estimatedFlightTime);
                     }
 
                     setgradanddistandaz(overlay.pointlist, home);
@@ -3481,6 +3484,25 @@ namespace MissionPlanner.GCSViews
                         ? string.Format((distInKM * 1000).ToString("0.00 m"))
                         : string.Format(distInKM.ToString("0.0000 km"));
             }
+        }
+
+        /// <summary> 
+        /// 見積もり飛行時間を「hh:mm:ss」形式の文字列にフォーマットします。
+        /// </summary>
+        /// <param name="estimatedFlightTime">見積もり飛行時間（秒単位）</param>
+        /// <returns>「hh:mm:ss」形式の飛行時間</returns>
+        private string FormatFlightTime(double estimatedFlightTime)
+        {
+            // estimatedFlightTime を秒単位と仮定し、四捨五入して整数に変換
+            int totalSeconds = (int)Math.Round(estimatedFlightTime);
+
+            // 時間、分、秒を計算
+            int hours = totalSeconds / 3600;
+            int minutes = (totalSeconds % 3600) / 60;
+            int seconds = totalSeconds % 60;
+
+            // "hh:mm:ss" 形式でフォーマット（各項目は2桁表示）
+            return $"{hours:D2}:{minutes:D2}:{seconds:D2}";
         }
 
         public void fromSHPToolStripMenuItem_Click(object sender, EventArgs e)
