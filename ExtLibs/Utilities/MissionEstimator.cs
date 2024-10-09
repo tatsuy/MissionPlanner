@@ -9,7 +9,7 @@ namespace MissionPlanner.Utilities
     public static class MissionEstimator
     {
         // サンプリング間隔（メートル）
-        private const double SamplingInterval = 10.0;
+        private const double SamplingInterval = 30.0;
 
         // 3D距離を計算するメソッド
         public static double GetDistance3D(PointLatLngAlt p1, PointLatLngAlt p2)
@@ -374,6 +374,324 @@ namespace MissionPlanner.Utilities
             totalRTLDistance += descentDistance;
 
             return totalRTLDistance;
+        }
+
+        /// <summary>
+        /// 経路全体の3D距離を計算します。地形高度を考慮して距離を積算します。
+        /// フレームが GLOBAL_TERRAIN_ALT の場合のみ地形高度を考慮します。
+        /// </summary>
+        /// <param name="home">ホームポイント</param>
+        /// <param name="wpCommandList">ウェイポイントのリスト</param>
+        /// <returns>総3D距離（メートル）</returns>
+        public static (double Total3DDistance, double totalEstimatedTimeSeconds) CalculateTotal3DDistanceWithTerrain(
+            PointLatLngAlt home,
+            List<Locationwp> wpCommandList,
+            bool isTerrain,
+            double rtlAltitude = 60.0,
+            double horizontalSpeed = 10.0, // m/s
+            double ascentSpeed = 2.5,      // m/s
+            double descentSpeed = 2.5      // m/s
+            )
+        {
+            if (!wpCommandList.Any())
+            {
+                return (0.0, 0.0);
+            }
+
+            double totalDistance = 0.0;
+            double totalEstimatedTimeSeconds = 0.0;
+
+            // 初期のpreviousCommandをホームポイントとして設定
+            Locationwp previousCommand = new Locationwp
+            {
+                lat = home.Lat,
+                lng = home.Lng,
+                alt = (float)home.Alt, // home.Alt は float にキャスト
+                frame = (int)MAVLink.MAV_FRAME.GLOBAL, // ホームポイントのフレームを設定
+                id = (int)MAVLink.MAV_CMD.WAYPOINT // ホームポイントをWAYPOINTとして扱う
+            };
+
+            // 初期のpreviousWaypointもホームポイントと同じとする
+            Locationwp previousWaypoint = previousCommand;
+
+            foreach (var currentCommand in wpCommandList)
+            {
+                if (((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT ||
+                         ((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT_INT)
+                {
+                    // フレームが GLOBAL_TERRAIN_ALT の場合、地形高度を考慮して距離を計算
+                    previousCommand.frame = currentCommand.frame;
+                    PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, previousCommand.alt);
+                    PointLatLngAlt currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, currentCommand.alt,
+                        ((MAVLink.MAV_FRAME)currentCommand.frame).ToString());
+
+                    // 経路をサンプリング
+                    List<PointLatLngAlt> sampledPoints = SamplePath(previousPoint, currentPoint);
+
+                    foreach (var sampledPoint in sampledPoints)
+                    {
+                        // フレームが GLOBAL_TERRAIN_ALT の場合のみ地形高度を補正
+                        double correctedAlt = sampledPoint.Alt + srtm.getAltitude(sampledPoint.Lat, sampledPoint.Lng).alt;
+                        //double correctedAlt = GetCorrectedAltitude(home.Alt, currentCommand);
+
+                        // サンプルポイントの高度を補正
+                        sampledPoint.Alt = correctedAlt - home.Alt;
+
+                        // 前のサンプルポイントとの3D距離を計算
+                        double distance = GetDistance3D(previousPoint, sampledPoint);
+                        totalDistance += distance;
+                        double HorizontalDistance = sampledPoint.GetDistance(previousPoint);
+                        double HorizontalEstimatedTime = HorizontalDistance / horizontalSpeed;
+                        double VerticalDistance = sampledPoint.Alt - previousPoint.Alt;
+                        double VerticalEstimatedTime = 0.0;
+                        if (VerticalDistance > 0)
+                            VerticalEstimatedTime = VerticalDistance / ascentSpeed;
+                        else
+                            VerticalEstimatedTime = -VerticalDistance / descentSpeed;
+                        if (HorizontalEstimatedTime >= VerticalEstimatedTime)
+                            totalEstimatedTimeSeconds += HorizontalEstimatedTime;
+                        else
+                            totalEstimatedTimeSeconds += VerticalEstimatedTime;
+                        Console.WriteLine($"wp1 ({previousPoint.Lat}, {previousPoint.Lng}, {previousPoint.Alt}) wp2 ({sampledPoint.Lat}, {sampledPoint.Lng}, {sampledPoint.Alt}) d: {distance}");
+
+                        // 次のサンプルポイントのために現在のポイントを設定
+                        previousPoint = sampledPoint;
+                    }
+                    previousCommand = currentCommand;
+
+                    // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
+                    if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
+                    {
+                        previousWaypoint = currentCommand;
+                    }
+                }
+                else
+                {
+                    // フレームが GLOBAL_TERRAIN_ALT でない場合、通常の距離計算を行う
+                    (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                    totalDistance += distance;
+                    totalEstimatedTimeSeconds += estimatedFlightTime;
+
+                    if (currentCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
+                    {
+                        // TAKEOFFコマンドの場合、previousCommandの高度のみを更新
+                        previousCommand.alt = currentCommand.alt;
+                        // 緯度・経度はホームポイントのまま
+                    }
+                    else
+                    {
+                        // 通常のコマンドの場合、previousCommandを更新
+                        previousCommand = currentCommand;
+                    }
+
+                    // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
+                    if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
+                    {
+                        previousWaypoint = currentCommand;
+                    }
+                }
+            }
+
+            return (totalDistance, totalEstimatedTimeSeconds);
+        }
+
+        public static (double distance, double flightTime) CalculateDistanceAndFlightTimeForCommand(
+            PointLatLngAlt home,
+            Locationwp currentCommand,
+            Locationwp previousWaypoint,
+            Locationwp previousCommand,
+            bool isTerrain,
+            double rtlAltitude = 60.0,
+            double horizontalSpeed = 10.0, // m/s
+            double ascentSpeed = 2.5,      // m/s
+            double descentSpeed = 2.5      // m/s
+            )
+        {
+            double distance = 0.0;
+            double flightTime = 0.0;
+
+            switch (currentCommand.id)
+            {
+                case (int)MAVLink.MAV_CMD.WAYPOINT:
+                case (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT:
+                    PointLatLngAlt currentPoint;
+
+                    // 緯度、経度が0, 0の場合は前のWAYPOINTの座標を使用
+                    if (currentCommand.lat == 0.0 && currentCommand.lng == 0.0)
+                    {
+                        // もし前のコマンドがTAKEOFFであれば、Homeの緯度・経度を使用
+                        if (previousCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
+                        {
+                            currentPoint = new PointLatLngAlt(home.Lat, home.Lng, currentCommand.alt, "GLOBAL");
+                        }
+                        else
+                        {
+                            currentPoint = new PointLatLngAlt(previousWaypoint.lat, previousWaypoint.lng, currentCommand.alt, "GLOBAL");
+                        }
+                    }
+                    else
+                    {
+                        // MAV_FRAME列挙型を使用してフレーム名を取得
+                        string frameName = ((MAVLink.MAV_FRAME)currentCommand.frame).ToString();
+                        currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, currentCommand.alt, frameName);
+                    }
+
+                    // 前のコマンドのフレーム名を取得
+                    string previousFrameName = ((MAVLink.MAV_FRAME)previousCommand.frame).ToString();
+                    PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, previousCommand.alt, previousFrameName);
+                    distance = GetDistance3D(currentPoint, previousPoint);
+                    double HorizontalDistance = currentPoint.GetDistance(previousPoint);
+                    double HorizontalEstimatedTime = HorizontalDistance / horizontalSpeed;
+                    double VerticalDistance = currentPoint.Alt - previousPoint.Alt;
+                    double VerticalEstimatedTime = 0.0;
+                    if (VerticalDistance > 0)
+                        VerticalEstimatedTime = VerticalDistance / ascentSpeed;
+                    else
+                        VerticalEstimatedTime = -VerticalDistance / descentSpeed;
+                    if (HorizontalEstimatedTime >= VerticalEstimatedTime)
+                        flightTime = HorizontalEstimatedTime;
+                    else
+                        flightTime = VerticalEstimatedTime;
+
+                    break;
+
+                case (int)MAVLink.MAV_CMD.TAKEOFF:
+                    // 高度補正を行ってから距離を計算
+                    double correctedCurrentAlt = GetCorrectedAltitude(home.Alt, currentCommand);
+                    double correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
+
+                    distance = Math.Abs(correctedCurrentAlt - correctedPreviousAlt);
+                    flightTime = distance / ascentSpeed;
+                    break;
+
+                case (int)MAVLink.MAV_CMD.LAND:
+                    // LANDコマンド: 現在位置から地面への垂直降下距離を計算
+                    // 仮定: LANDコマンドのcurrentCommand.altは0とする
+                    distance = Math.Abs(currentCommand.alt - previousCommand.alt);
+                    flightTime = distance / descentSpeed;
+                    break;
+
+                case (int)MAVLink.MAV_CMD.RETURN_TO_LAUNCH:
+                    // RETURN_TO_LAUNCHコマンドの処理
+                    (distance, flightTime) = CalculateRTLDistance(home, previousCommand, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                    break;
+
+                // 他のコマンドIDに対する処理を追加
+                case (int)MAVLink.MAV_CMD.PAYLOAD_PLACE:
+                case (int)MAVLink.MAV_CMD.DO_JUMP:
+                    // 他の未対応コマンドもここに追加可能
+                    distance = 0.0;
+                    break;
+
+                default:
+                    // 距離に影響しないコマンドは無視
+                    distance = 0.0;
+                    break;
+            }
+
+            return (distance, flightTime);
+        }
+        
+        /// <summary>
+        /// RETURN_TO_LAUNCHコマンドの総距離を計算します。
+        /// </summary>
+        /// <param name="home">ホームポイント</param>
+        /// <param name="previousCommand">前のコマンド</param>
+        /// <param name="currentCommand">現在のコマンド</param>
+        /// <param name="isTerrain">地形を考慮するかどうか</param>
+        /// <param name="rtlAltitude">RTL時の目標高度（メートル）</param>
+        /// <returns>総距離（メートル）</returns>
+        private static (double distance, double flightTime) CalculateRTLDistance(
+            PointLatLngAlt home,
+            Locationwp previousCommand,
+            Locationwp currentCommand,
+            bool isTerrain,
+            double rtlAltitude = 60.0,
+            double horizontalSpeed = 10.0, // m/s
+            double ascentSpeed = 2.5,      // m/s
+            double descentSpeed = 2.5      // m/s
+            )
+        {
+            double totalRTLDistance = 0.0;
+            double totalFlightTime = 0.0;
+
+            // 1. 上昇: 現在の高度がdesiredAltitude未満の場合、desiredAltitudeまで上昇
+            double ascentDistance = 0.0;
+            if (previousCommand.alt < rtlAltitude)
+            {
+                ascentDistance = rtlAltitude - previousCommand.alt;
+                totalRTLDistance += ascentDistance;
+                totalFlightTime += ascentDistance / ascentSpeed;
+                Console.WriteLine($"Ascent Distance: {ascentDistance} meters to reach desired altitude of {rtlAltitude} meters.");
+            }
+
+            // 2. ホームポイントへの水平移動（高度はdesiredAltitude）
+            double currentAltitudeForMove = previousCommand.alt < rtlAltitude ? rtlAltitude : previousCommand.alt;
+            PointLatLngAlt currentAtDesiredAlt = new PointLatLngAlt(
+                previousCommand.lat,
+                previousCommand.lng,
+                currentAltitudeForMove,
+                "GLOBAL" // フレームを固定値に設定
+            );
+
+            PointLatLngAlt homeAtDesiredAlt = new PointLatLngAlt(
+                home.Lat,
+                home.Lng,
+                rtlAltitude,
+                "GLOBAL" // フレームを固定値に設定
+            );
+
+            if (isTerrain)
+            {
+                // 地形を考慮してサンプルパスを使用
+                List<PointLatLngAlt> sampledPoints = SamplePath(currentAtDesiredAlt, homeAtDesiredAlt);
+                if (sampledPoints.Count < 2)
+                {
+                    // サンプルポイントが1点以下の場合は距離を加算しない
+                    Console.WriteLine("Sampled points insufficient for distance calculation.");
+                }
+                else
+                {
+                    PointLatLngAlt previousPoint = sampledPoints.First();
+
+                    foreach (var sampledPoint in sampledPoints.Skip(1))
+                    {
+                        // サンプルポイント間の3D距離を計算
+                        double distance = GetDistance3D(previousPoint, sampledPoint);
+                        totalRTLDistance += distance;
+                        Console.WriteLine($"Sampled Point1 ({previousPoint.Lat}, {previousPoint.Lng}, {previousPoint.Alt}) " +
+                                          $"Point2 ({sampledPoint.Lat}, {sampledPoint.Lng}, {sampledPoint.Alt}) Distance: {distance}");
+                        previousPoint = sampledPoint;
+                    }
+                }
+            }
+            else
+            {
+                // 通常の直線距離を計算
+                double horizontalDistance = GetDistance3D(currentAtDesiredAlt, homeAtDesiredAlt);
+                totalRTLDistance += horizontalDistance;
+                double HorizontalDistance = currentAtDesiredAlt.GetDistance(homeAtDesiredAlt);
+                double HorizontalEstimatedTime = HorizontalDistance / horizontalSpeed;
+                double VerticalDistance = currentAtDesiredAlt.Alt - homeAtDesiredAlt.Alt;
+                double VerticalEstimatedTime = 0.0;
+                if (VerticalDistance > 0)
+                    VerticalEstimatedTime = VerticalDistance / ascentSpeed;
+                else
+                    VerticalEstimatedTime = -VerticalDistance / descentSpeed;
+                if (HorizontalEstimatedTime >= VerticalEstimatedTime)
+                    totalFlightTime += HorizontalEstimatedTime;
+                else
+                    totalFlightTime += VerticalEstimatedTime;
+                Console.WriteLine($"Straight Line Distance: {horizontalDistance} meters.");
+            }
+
+            // 3. 降下: ホームポイントから地面へ降下
+            double descentDistance = rtlAltitude; // ホームポイントは地面にあると仮定
+            totalRTLDistance += descentDistance;
+            totalFlightTime += descentDistance / descentSpeed;
+            Console.WriteLine($"Descent Distance: {descentDistance} meters to land.");
+
+            return (totalRTLDistance, totalFlightTime);
         }
     }
 }
