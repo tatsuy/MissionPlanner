@@ -153,7 +153,7 @@ namespace MissionPlanner.Utilities
             foreach (var currentCommand in wpCommandList)
             {
                 // 通常の距離計算を行う
-                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, ref horizontalSpeed, ref ascentSpeed, ref descentSpeed);
                 totalDistance += distance;
                 totalEstimatedTimeSeconds += estimatedFlightTime;
 
@@ -175,10 +175,10 @@ namespace MissionPlanner.Utilities
             ref Locationwp previousWaypoint,
             Locationwp previousCommand,
             bool isTerrain,
-            double rtlAltitude = 60.0,
-            double horizontalSpeed = 10.0, // m/s
-            double ascentSpeed = 2.5,      // m/s
-            double descentSpeed = 2.5      // m/s
+            double rtlAltitude,
+            ref double horizontalSpeed, // m/s
+            ref double ascentSpeed,      // m/s
+            ref double descentSpeed      // m/s
             )
         {
             double distance = 0.0;
@@ -305,6 +305,41 @@ namespace MissionPlanner.Utilities
                     // RETURN_TO_LAUNCHコマンドの処理
                     (distance, flightTime) = CalculateRTLDistance(home, previousWaypoint, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
                     break;
+
+                case (int)MAVLink.MAV_CMD.DO_CHANGE_SPEED:
+                    {
+                        // DO_CHANGE_SPEEDコマンドの処理
+                        // param1: Speed type (0,1=Ground Speed, 2=Climb Speed, 3=Descent Speed)
+                        // param2: Target speed (m/s)
+                        int speedType = (int)currentCommand.p1;
+                        float targetSpeed = currentCommand.p2;
+
+                        switch (speedType)
+                        {
+                            case 0:
+                            case 1:
+                                // Ground Speed
+                                horizontalSpeed = targetSpeed;
+                                Console.WriteLine($"Ground Speed changed to {horizontalSpeed} m/s");
+                                break;
+                            case 2:
+                                // Climb Speed
+                                ascentSpeed = targetSpeed;
+                                Console.WriteLine($"Climb Speed changed to {ascentSpeed} m/s");
+                                break;
+                            case 3:
+                                // Descent Speed
+                                descentSpeed = targetSpeed;
+                                Console.WriteLine($"Descent Speed changed to {descentSpeed} m/s");
+                                break;
+                            default:
+                                Console.WriteLine($"Unknown Speed Type: {speedType}");
+                                break;
+                        }
+
+                        // DO_CHANGE_SPEEDコマンド自体は飛行時間に影響しない
+                        break;
+                    }
 
                 // 他のコマンドIDに対する処理を追加
                 case (int)MAVLink.MAV_CMD.PAYLOAD_PLACE:
