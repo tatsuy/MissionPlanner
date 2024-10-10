@@ -153,27 +153,17 @@ namespace MissionPlanner.Utilities
             foreach (var currentCommand in wpCommandList)
             {
                 // 通常の距離計算を行う
-                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
                 totalDistance += distance;
                 totalEstimatedTimeSeconds += estimatedFlightTime;
 
                 if (currentCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
                 {
-                    // TAKEOFFコマンドの場合、previousCommandの高度のみを更新
-                    previousCommand.alt += currentCommand.alt;
+                    // TAKEOFFコマンドの場合、previousWaypointの高度のみを更新
+                    previousWaypoint.alt += currentCommand.alt;
                     // 緯度・経度はホームポイントのまま
                 }
-                else
-                {
-                    // 通常のコマンドの場合、previousCommandを更新
-                    previousCommand = currentCommand;
-                }
-
-                // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
-                if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
-                {
-                    previousWaypoint = currentCommand;
-                }
+                previousCommand = currentCommand;
             }
 
             return (totalDistance, totalEstimatedTimeSeconds);
@@ -182,7 +172,7 @@ namespace MissionPlanner.Utilities
         public static (double distance, double flightTime) CalculateDistanceAndFlightTimeForCommand(
             PointLatLngAlt home,
             Locationwp currentCommand,
-            Locationwp previousWaypoint,
+            ref Locationwp previousWaypoint,
             Locationwp previousCommand,
             bool isTerrain,
             double rtlAltitude = 60.0,
@@ -198,40 +188,41 @@ namespace MissionPlanner.Utilities
             {
                 case (int)MAVLink.MAV_CMD.WAYPOINT:
                 case (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT:
-                    PointLatLngAlt currentPoint;
+                    string frameName = ((MAVLink.MAV_FRAME)currentCommand.frame).ToString();
+                    PointLatLngAlt currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, currentCommand.alt, frameName);
 
                     // 緯度、経度が0, 0の場合は前のWAYPOINTの座標を使用
                     if (currentCommand.lat == 0.0 && currentCommand.lng == 0.0)
                     {
-                        // もし前のコマンドがTAKEOFFであれば、Homeの緯度・経度を使用
-                        if (previousCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
-                        {
-                            currentPoint = new PointLatLngAlt(home.Lat, home.Lng, GetCorrectedAltitude(home.Alt, currentCommand), "GLOBAL");
-                        }
-                        else
-                        {
-                            currentPoint = new PointLatLngAlt(previousWaypoint.lat, previousWaypoint.lng, GetCorrectedAltitude(home.Alt, currentCommand), "GLOBAL");
-                        }
+                        currentPoint.Lat = previousWaypoint.lat;
+                        currentPoint.Lng = previousWaypoint.lng;
+                    } 
+                    else
+                    {
+                        currentPoint.Lat = currentCommand.lat;
+                        currentPoint.Lng = currentCommand.lng;
+                    }
+                    if (currentCommand.alt == 0.0)
+                    {
+                        double correctedAlt = GetCorrectedAltitude(home.Alt, previousWaypoint);
+                        currentPoint.Alt = correctedAlt;
                     }
                     else
                     {
-                        // フレームに基づいて高度を補正
                         double correctedAlt = GetCorrectedAltitude(home.Alt, currentCommand);
-                        string frameName = ((MAVLink.MAV_FRAME)currentCommand.frame).ToString();
-                        currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, correctedAlt, frameName);
+                        currentPoint.Alt = correctedAlt;
                     }
-
 
                     if (((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT ||
                              ((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT_INT)
                     {
-                        var previousCorrectedAltitude = previousCommand.alt;
-                        if (((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL ||
-                             ((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_INT)
+                        var previousCorrectedAltitude = previousWaypoint.alt;
+                        if (((MAVLink.MAV_FRAME)previousWaypoint.frame) == MAVLink.MAV_FRAME.GLOBAL ||
+                             ((MAVLink.MAV_FRAME)previousWaypoint.frame) == MAVLink.MAV_FRAME.GLOBAL_INT)
                         {
-                            previousCorrectedAltitude -= (float)GetCachedTerrainAltitude(previousCommand.lat, previousCommand.lng);
+                            previousCorrectedAltitude -= (float)GetCachedTerrainAltitude(previousWaypoint.lat, previousWaypoint.lng);
                         }
-                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, previousCorrectedAltitude);
+                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousWaypoint.lat, previousWaypoint.lng, previousCorrectedAltitude);
                         currentPoint.Alt = currentCommand.alt;
                         currentPoint.Tag = ((MAVLink.MAV_FRAME)currentCommand.frame).ToString();
 
@@ -268,9 +259,9 @@ namespace MissionPlanner.Utilities
                     else
                     {
                         // 前のコマンドのフレーム名を取得
-                        double correctedPreviousAltitude = GetCorrectedAltitude(home.Alt, previousCommand);
-                        string previousFrameName = ((MAVLink.MAV_FRAME)previousCommand.frame).ToString();
-                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, correctedPreviousAltitude, previousFrameName);
+                        double correctedPreviousAltitude = GetCorrectedAltitude(home.Alt, previousWaypoint);
+                        string previousFrameName = ((MAVLink.MAV_FRAME)previousWaypoint.frame).ToString();
+                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousWaypoint.lat, previousWaypoint.lng, correctedPreviousAltitude, previousFrameName);
 
                         distance = GetDistance3D(currentPoint, previousPoint);
 
@@ -278,12 +269,23 @@ namespace MissionPlanner.Utilities
                         double verticalSegmentDistance = currentPoint.Alt - previousPoint.Alt;
                         flightTime = CalculateSegmentFlightTime(horizontalDistance, verticalSegmentDistance, horizontalSpeed, ascentSpeed, descentSpeed);
                     }
-                    break;
+                    if (currentCommand.lat != 0.0 && currentCommand.lng != 0.0)
+                    {
+                        previousWaypoint.lat = currentCommand.lat;
+                        previousWaypoint.lng = currentCommand.lng;
+                    }
+                    if (currentCommand.alt != 0.0)
+                    {
+                        previousWaypoint.alt = currentCommand.alt;
+                    }
+                    previousWaypoint.id = currentCommand.id;
+                    previousWaypoint.frame = currentCommand.frame;
+                        break;
 
                 case (int)MAVLink.MAV_CMD.TAKEOFF:
                     // 高度補正を行ってから距離を計算
                     double correctedCurrentAlt = GetCorrectedAltitude(home.Alt, currentCommand);
-                    double correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
+                    double correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousWaypoint);
 
                     distance = Math.Abs(correctedCurrentAlt - correctedPreviousAlt);
                     double verticalDistance = correctedCurrentAlt - correctedPreviousAlt;
@@ -293,7 +295,7 @@ namespace MissionPlanner.Utilities
                 case (int)MAVLink.MAV_CMD.LAND:
                     // LANDコマンド: 現在位置から地面への垂直降下距離を計算
                     double landAltitude = GetCorrectedAltitude(home.Alt, currentCommand);
-                    correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
+                    correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousWaypoint);
                     distance = Math.Abs(correctedPreviousAlt - landAltitude);
                     verticalDistance = landAltitude - correctedPreviousAlt;
                     flightTime = CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
@@ -301,7 +303,7 @@ namespace MissionPlanner.Utilities
 
                 case (int)MAVLink.MAV_CMD.RETURN_TO_LAUNCH:
                     // RETURN_TO_LAUNCHコマンドの処理
-                    (distance, flightTime) = CalculateRTLDistance(home, previousCommand, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                    (distance, flightTime) = CalculateRTLDistance(home, previousWaypoint, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
                     break;
 
                 // 他のコマンドIDに対する処理を追加
