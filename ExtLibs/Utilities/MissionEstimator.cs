@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using MissionPlanner.Utilities; // srtm クラスを使用するための using
 using System.Threading.Tasks; // パラレル処理のための using
+using System.Collections.Concurrent;
 
 namespace MissionPlanner.Utilities
 {
@@ -12,18 +13,12 @@ namespace MissionPlanner.Utilities
         // サンプリング間隔（メートル）
         private const double SamplingInterval = 30.0;
 
-        // 地形高度のキャッシュ
-        private static Dictionary<(double lat, double lng), double> terrainCache = new Dictionary<(double, double), double>();
+        private static ConcurrentDictionary<(double lat, double lng), double> terrainCache = new ConcurrentDictionary<(double, double), double>();
 
         private static double GetCachedTerrainAltitude(double lat, double lng)
         {
             var key = (lat, lng);
-            if (!terrainCache.TryGetValue(key, out double altitude))
-            {
-                altitude = srtm.getAltitude(lat, lng).alt;
-                terrainCache[key] = altitude;
-            }
-            return altitude;
+            return terrainCache.GetOrAdd(key, k => srtm.getAltitude(k.lat, k.lng).alt);
         }
 
         // 3D距離を計算するメソッド
