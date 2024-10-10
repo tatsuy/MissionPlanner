@@ -9,6 +9,39 @@ namespace MissionPlanner.Utilities.Tests
     public class MissionEstimaterTests
     {
         [TestMethod()]
+        public void TestCalculateTotal3DDistanceWithTerrain_TakeoffOnly()
+        {
+            // ホームポイント
+            PointLatLngAlt home = new PointLatLngAlt(43.2894735, 143.2349412, 440.17, "HOME");
+
+            // ウェイポイントリストにTAKEOFFのみ
+            List<Locationwp> wpCommandList = new List<Locationwp>
+            {
+                new Locationwp
+                {
+                    lat = 0.0,
+                    lng = 0.0,
+                    alt = 15.0f,
+                    frame = (int)MAVLink.MAV_FRAME.GLOBAL_RELATIVE_ALT,
+                    id = (int)MAVLink.MAV_CMD.TAKEOFF
+                }
+            };
+
+            // 総距離を計算
+            (double totalDistanceWithTerrain, double totalEstimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList, false, 60, 10, 2.5, 2.5);
+
+            // 期待値: TAKEOFFで15m上昇
+            // 総距離 = 15m
+            double expectedDistance = 15.0; // meters
+            double expectedFlightTime = 6;
+            double tolerance = 0.1; // meters
+
+            // Assert.AreEqual を使用して期待値と実際の値を比較
+            Assert.AreEqual(expectedDistance, Math.Round(totalDistanceWithTerrain, 2), tolerance, $"CalculateTotal3DDistanceWithTerrain returned {totalDistanceWithTerrain} meters, expected {expectedDistance} meters.");
+            Assert.AreEqual(expectedFlightTime, Math.Round(totalEstimatedFlightTime, 2), tolerance, $"CalculateTotal3DDistanceWithTerrain returned {totalEstimatedFlightTime} seconds, expected {expectedFlightTime} seconds.");
+        }
+
+        [TestMethod()]
         public void TestCalculateTotal3DDistanceWithTerrain_TakeoffAndWaypoint()
         {
             // ホームポイント
@@ -42,39 +75,6 @@ namespace MissionPlanner.Utilities.Tests
             // 総距離 = 10m (高度差) + 2000m (水平移動) = 2010m
             double expectedDistance = 2010.0; // meters
             double expectedFlightTime = 204;
-            double tolerance = 0.1; // meters
-
-            // Assert.AreEqual を使用して期待値と実際の値を比較
-            Assert.AreEqual(expectedDistance, Math.Round(totalDistanceWithTerrain, 2), tolerance, $"CalculateTotal3DDistanceWithTerrain returned {totalDistanceWithTerrain} meters, expected {expectedDistance} meters.");
-            Assert.AreEqual(expectedFlightTime, Math.Round(totalEstimatedFlightTime, 2), tolerance, $"CalculateTotal3DDistanceWithTerrain returned {totalEstimatedFlightTime} seconds, expected {expectedFlightTime} seconds.");
-        }
-
-        [TestMethod()]
-        public void TestCalculateTotal3DDistanceWithTerrain_TakeoffOnly()
-        {
-            // ホームポイント
-            PointLatLngAlt home = new PointLatLngAlt(43.2894735, 143.2349412, 440.17, "HOME");
-
-            // ウェイポイントリストにTAKEOFFのみ
-            List<Locationwp> wpCommandList = new List<Locationwp>
-            {
-                new Locationwp
-                {
-                    lat = 0.0,
-                    lng = 0.0,
-                    alt = 15.0f,
-                    frame = (int)MAVLink.MAV_FRAME.GLOBAL_RELATIVE_ALT,
-                    id = (int)MAVLink.MAV_CMD.TAKEOFF
-                }
-            };
-
-            // 総距離を計算
-            (double totalDistanceWithTerrain, double totalEstimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList, false, 60, 10, 2.5, 2.5);
-
-            // 期待値: TAKEOFFで15m上昇
-            // 総距離 = 15m
-            double expectedDistance = 15.0; // meters
-            double expectedFlightTime = 6;
             double tolerance = 0.1; // meters
 
             // Assert.AreEqual を使用して期待値と実際の値を比較
