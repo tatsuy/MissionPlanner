@@ -424,82 +424,27 @@ namespace MissionPlanner.Utilities
 
             foreach (var currentCommand in wpCommandList)
             {
-                if (((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT ||
-                         ((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT_INT)
+                // 通常の距離計算を行う
+                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                totalDistance += distance;
+                totalEstimatedTimeSeconds += estimatedFlightTime;
+
+                if (currentCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
                 {
-                    var previousCorrectedAltitude = previousCommand.alt;
-                    if (((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL ||
-                         ((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_INT)
-                    {
-                        previousCorrectedAltitude -= (float)GetCachedTerrainAltitude(previousCommand.lat, previousCommand.lng);
-                    }
-                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, previousCorrectedAltitude);
-                        PointLatLngAlt currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, currentCommand.alt,
-                        ((MAVLink.MAV_FRAME)currentCommand.frame).ToString());
-
-                    // 経路をサンプリング
-                    List<PointLatLngAlt> sampledPoints = SamplePath(previousPoint, currentPoint);
-
-                    if (sampledPoints.Count >= 2)
-                    {
-                        PointLatLngAlt previousSample = sampledPoints.First();
-                        previousSample.Alt += GetCachedTerrainAltitude(previousSample.Lat, previousSample.Lng);
-                        for (int i = 1; i < sampledPoints.Count; i++)
-                        {
-                            var currentSample = sampledPoints[i];
-                            currentSample.Alt += GetCachedTerrainAltitude(currentSample.Lat, currentSample.Lng);
-
-                            // 前のサンプルポイントとの3D距離を計算
-                            double distance = GetDistance3D(previousSample, currentSample);
-                            totalDistance += distance;
-
-                            double horizontalDistance = currentSample.GetDistance(previousSample);
-                            double verticalDistance = currentSample.Alt - previousSample.Alt;
-                            double segmentTime = CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
-                            totalEstimatedTimeSeconds += segmentTime;
-
-                            Console.WriteLine($"Sampled Point1 ({previousSample.Lat}, {previousSample.Lng}, {previousSample.Alt}) " +
-                                              $"Point2 ({currentSample.Lat}, {currentSample.Lng}, {currentSample.Alt}) Distance: {distance}");
-                            previousSample = currentSample;
-                        }
-                    }
-                    else
-                    {
-                        Console.WriteLine("Sampled points insufficient for distance calculation.");
-                    }
-
-                    previousCommand = currentCommand;
-
-                    // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
-                    if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
-                    {
-                        previousWaypoint = currentCommand;
-                    }
+                    // TAKEOFFコマンドの場合、previousCommandの高度のみを更新
+                    previousCommand.alt += currentCommand.alt;
+                    // 緯度・経度はホームポイントのまま
                 }
                 else
                 {
-                    // 通常の距離計算を行う
-                    (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, previousWaypoint, previousCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
-                    totalDistance += distance;
-                    totalEstimatedTimeSeconds += estimatedFlightTime;
+                    // 通常のコマンドの場合、previousCommandを更新
+                    previousCommand = currentCommand;
+                }
 
-                    if (currentCommand.id == (int)MAVLink.MAV_CMD.TAKEOFF)
-                    {
-                        // TAKEOFFコマンドの場合、previousCommandの高度のみを更新
-                        previousCommand.alt += currentCommand.alt;
-                        // 緯度・経度はホームポイントのまま
-                    }
-                    else
-                    {
-                        // 通常のコマンドの場合、previousCommandを更新
-                        previousCommand = currentCommand;
-                    }
-
-                    // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
-                    if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
-                    {
-                        previousWaypoint = currentCommand;
-                    }
+                // 現在のコマンドがWAYPOINTまたはSPLINE_WAYPOINTの場合、previousWaypointを更新
+                if (currentCommand.id == (int)MAVLink.MAV_CMD.WAYPOINT || currentCommand.id == (int)MAVLink.MAV_CMD.SPLINE_WAYPOINT)
+                {
+                    previousWaypoint = currentCommand;
                 }
             }
 
@@ -548,26 +493,72 @@ namespace MissionPlanner.Utilities
                         currentPoint = new PointLatLngAlt(currentCommand.lat, currentCommand.lng, correctedAlt, frameName);
                     }
 
-                    // 前のコマンドのフレーム名を取得
-                    double correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
-                    string previousFrameName = ((MAVLink.MAV_FRAME)previousCommand.frame).ToString();
-                    PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, correctedPreviousAlt, previousFrameName);
 
-                    distance = GetDistance3D(currentPoint, previousPoint);
+                    if (((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT ||
+                             ((MAVLink.MAV_FRAME)currentCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_TERRAIN_ALT_INT)
+                    {
+                        var previousCorrectedAltitude = previousCommand.alt;
+                        if (((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL ||
+                             ((MAVLink.MAV_FRAME)previousCommand.frame) == MAVLink.MAV_FRAME.GLOBAL_INT)
+                        {
+                            previousCorrectedAltitude -= (float)GetCachedTerrainAltitude(previousCommand.lat, previousCommand.lng);
+                        }
+                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, previousCorrectedAltitude);
+                        currentPoint.Alt = currentCommand.alt;
+                        currentPoint.Tag = ((MAVLink.MAV_FRAME)currentCommand.frame).ToString();
 
-                    double horizontalDistance = currentPoint.GetDistance(previousPoint);
-                    double verticalDistance = currentPoint.Alt - previousPoint.Alt;
-                    flightTime = CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                        // 経路をサンプリング
+                        List<PointLatLngAlt> sampledPoints = SamplePath(previousPoint, currentPoint);
 
+                        if (sampledPoints.Count >= 2)
+                        {
+                            PointLatLngAlt previousSample = sampledPoints.First();
+                            previousSample.Alt += GetCachedTerrainAltitude(previousSample.Lat, previousSample.Lng);
+                            for (int i = 1; i < sampledPoints.Count; i++)
+                            {
+                                var currentSample = sampledPoints[i];
+                                currentSample.Alt += GetCachedTerrainAltitude(currentSample.Lat, currentSample.Lng);
+
+                                // 前のサンプルポイントとの3D距離を計算
+                                distance += GetDistance3D(previousSample, currentSample);
+
+                                double horizontalSampleDistance = currentSample.GetDistance(previousSample);
+                                double verticalSampleDistance = currentSample.Alt - previousSample.Alt;
+                                double segmentTime = CalculateSegmentFlightTime(horizontalSampleDistance, verticalSampleDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                                flightTime += segmentTime;
+
+                                Console.WriteLine($"Sampled Point1 ({previousSample.Lat}, {previousSample.Lng}, {previousSample.Alt}) " +
+                                                  $"Point2 ({currentSample.Lat}, {currentSample.Lng}, {currentSample.Alt}) Distance: {distance}");
+                                previousSample = currentSample;
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("Sampled points insufficient for distance calculation.");
+                        }
+                    }
+                    else
+                    {
+                        // 前のコマンドのフレーム名を取得
+                        double correctedPreviousAltitude = GetCorrectedAltitude(home.Alt, previousCommand);
+                        string previousFrameName = ((MAVLink.MAV_FRAME)previousCommand.frame).ToString();
+                        PointLatLngAlt previousPoint = new PointLatLngAlt(previousCommand.lat, previousCommand.lng, correctedPreviousAltitude, previousFrameName);
+
+                        distance = GetDistance3D(currentPoint, previousPoint);
+
+                        double horizontalDistance = currentPoint.GetDistance(previousPoint);
+                        double verticalSegmentDistance = currentPoint.Alt - previousPoint.Alt;
+                        flightTime = CalculateSegmentFlightTime(horizontalDistance, verticalSegmentDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                    }
                     break;
 
                 case (int)MAVLink.MAV_CMD.TAKEOFF:
                     // 高度補正を行ってから距離を計算
                     double correctedCurrentAlt = GetCorrectedAltitude(home.Alt, currentCommand);
-                    correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
+                    double correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousCommand);
 
                     distance = Math.Abs(correctedCurrentAlt - correctedPreviousAlt);
-                    verticalDistance = correctedCurrentAlt - correctedPreviousAlt;
+                    double verticalDistance = correctedCurrentAlt - correctedPreviousAlt;
                     flightTime = CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
                     break;
 
