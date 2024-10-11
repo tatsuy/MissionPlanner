@@ -1554,6 +1554,7 @@ namespace MissionPlanner.GCSViews
                         {
                             Console.WriteLine("機体に接続されていません。デフォルト値を使用します。");
                         }
+                        List<(PointLatLngAlt Start, PointLatLngAlt End)> bottleneckSegments = new List<(PointLatLngAlt, PointLatLngAlt)>();
                         (double totalDistance3D, double estimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(
                             home,
                             wpCommandList,
@@ -1564,8 +1565,20 @@ namespace MissionPlanner.GCSViews
                             descentSpeed * 0.01,   // cm/s to m/s
                             landSpeed * 0.01,      // cm/s to m/s
                             landSpeedHigh * 0.01,  // cm/s to m/s
-                            landAltLow * 0.01      // cm to m
+                            landAltLow * 0.01,     // cm to m
+                            bottleneckSegments
                         );
+                        foreach (var segment in bottleneckSegments)
+                        {
+                            GMapRoute route = new GMapRoute("bottleneck segment");
+                            PointLatLngAlt start = new PointLatLngAlt(segment.Start.Lat, segment.Start.Lng);
+                            PointLatLngAlt end = new PointLatLngAlt(segment.End.Lat, segment.End.Lng);
+                            route.Points.Add(start);
+                            route.Points.Add(end);
+                            route.Stroke = new Pen(Color.Red, 4);
+                            route.Stroke.DashStyle = DashStyle.Custom;
+                            overlay.overlay.Routes.Add(route);
+                        }
 
                         // ラベルに3D距離を表示
                         lbl_3d_distance.Text = rm.GetString("lbl_3d_distance.Text") + ": " +
