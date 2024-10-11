@@ -78,6 +78,20 @@ namespace MissionPlanner.GCSViews
             this.coords1 = new MissionPlanner.Controls.Coords();
             this.lbl_status = new System.Windows.Forms.Label();
             this.panelWaypoints = new System.Windows.Forms.Panel();
+            this.label14 = new System.Windows.Forms.Label();
+            this.label13 = new System.Windows.Forms.Label();
+            this.TXT_LAND_ALT_LOW = new System.Windows.Forms.TextBox();
+            this.label12 = new System.Windows.Forms.Label();
+            this.label10 = new System.Windows.Forms.Label();
+            this.label9 = new System.Windows.Forms.Label();
+            this.label8 = new System.Windows.Forms.Label();
+            this.label7 = new System.Windows.Forms.Label();
+            this.TXT_SPEED_DN = new System.Windows.Forms.TextBox();
+            this.TXT_LAND_SPEED = new System.Windows.Forms.TextBox();
+            this.TXT_SPEED = new System.Windows.Forms.TextBox();
+            this.TXT_SPEED_UP = new System.Windows.Forms.TextBox();
+            this.TXT_LAND_SPEED_HIGH = new System.Windows.Forms.TextBox();
+            this.TXT_RTL_ALT = new System.Windows.Forms.TextBox();
             this.chk_usemavftp = new System.Windows.Forms.CheckBox();
             this.but_mincommands = new MissionPlanner.Controls.MyButton();
             this.CMB_altmode = new System.Windows.Forms.ComboBox();
@@ -101,10 +115,10 @@ namespace MissionPlanner.GCSViews
             this.BUT_saveWPFile = new MissionPlanner.Controls.MyButton();
             this.splitter2 = new System.Windows.Forms.Splitter();
             this.panelMap = new System.Windows.Forms.Panel();
-            this.lbl_estimated_time = new System.Windows.Forms.Label();
-            this.lbl_3d_distance = new System.Windows.Forms.Label();
             this.lbl_homedist = new System.Windows.Forms.Label();
             this.lbl_prevdist = new System.Windows.Forms.Label();
+            this.lbl_estimated_time = new System.Windows.Forms.Label();
+            this.lbl_3d_distance = new System.Windows.Forms.Label();
             this.Zoomlevel = new System.Windows.Forms.NumericUpDown();
             this.TRK_zoom = new MissionPlanner.Controls.MyTrackBar();
             this.label11 = new System.Windows.Forms.Label();
@@ -415,6 +429,20 @@ namespace MissionPlanner.GCSViews
             // 
             // panelWaypoints
             // 
+            this.panelWaypoints.Controls.Add(this.label14);
+            this.panelWaypoints.Controls.Add(this.label13);
+            this.panelWaypoints.Controls.Add(this.TXT_LAND_ALT_LOW);
+            this.panelWaypoints.Controls.Add(this.label12);
+            this.panelWaypoints.Controls.Add(this.label10);
+            this.panelWaypoints.Controls.Add(this.label9);
+            this.panelWaypoints.Controls.Add(this.label8);
+            this.panelWaypoints.Controls.Add(this.label7);
+            this.panelWaypoints.Controls.Add(this.TXT_SPEED_DN);
+            this.panelWaypoints.Controls.Add(this.TXT_LAND_SPEED);
+            this.panelWaypoints.Controls.Add(this.TXT_SPEED);
+            this.panelWaypoints.Controls.Add(this.TXT_SPEED_UP);
+            this.panelWaypoints.Controls.Add(this.TXT_LAND_SPEED_HIGH);
+            this.panelWaypoints.Controls.Add(this.TXT_RTL_ALT);
             this.panelWaypoints.Controls.Add(this.chk_usemavftp);
             this.panelWaypoints.Controls.Add(this.but_mincommands);
             this.panelWaypoints.Controls.Add(this.CMB_altmode);
@@ -433,6 +461,83 @@ namespace MissionPlanner.GCSViews
             resources.ApplyResources(this.panelWaypoints, "panelWaypoints");
             this.panelWaypoints.ForeColor = System.Drawing.SystemColors.ControlText;
             this.panelWaypoints.Name = "panelWaypoints";
+            // 
+            // label14
+            // 
+            resources.ApplyResources(this.label14, "label14");
+            this.label14.Name = "label14";
+            // 
+            // label13
+            // 
+            resources.ApplyResources(this.label13, "label13");
+            this.label13.Name = "label13";
+            // 
+            // TXT_LAND_ALT_LOW
+            // 
+            resources.ApplyResources(this.TXT_LAND_ALT_LOW, "TXT_LAND_ALT_LOW");
+            this.TXT_LAND_ALT_LOW.Name = "TXT_LAND_ALT_LOW";
+            this.TXT_LAND_ALT_LOW.Leave += new System.EventHandler(this.TXT_LAND_ALT_LOW_Leave);
+            // 
+            // label12
+            // 
+            resources.ApplyResources(this.label12, "label12");
+            this.label12.Name = "label12";
+            // 
+            // label10
+            // 
+            resources.ApplyResources(this.label10, "label10");
+            this.label10.Name = "label10";
+            // 
+            // label9
+            // 
+            resources.ApplyResources(this.label9, "label9");
+            this.label9.Name = "label9";
+            // 
+            // label8
+            // 
+            resources.ApplyResources(this.label8, "label8");
+            this.label8.Name = "label8";
+            // 
+            // label7
+            // 
+            resources.ApplyResources(this.label7, "label7");
+            this.label7.Name = "label7";
+            // 
+            // TXT_SPEED_DN
+            // 
+            resources.ApplyResources(this.TXT_SPEED_DN, "TXT_SPEED_DN");
+            this.TXT_SPEED_DN.Name = "TXT_SPEED_DN";
+            this.TXT_SPEED_DN.Leave += new System.EventHandler(this.TXT_SPEED_DN_Leave);
+            // 
+            // TXT_LAND_SPEED
+            // 
+            resources.ApplyResources(this.TXT_LAND_SPEED, "TXT_LAND_SPEED");
+            this.TXT_LAND_SPEED.Name = "TXT_LAND_SPEED";
+            this.TXT_LAND_SPEED.Leave += new System.EventHandler(this.TXT_LAND_SPEED_Leave);
+            // 
+            // TXT_SPEED
+            // 
+            resources.ApplyResources(this.TXT_SPEED, "TXT_SPEED");
+            this.TXT_SPEED.Name = "TXT_SPEED";
+            this.TXT_SPEED.Leave += new System.EventHandler(this.TXT_SPEED_Leave);
+            // 
+            // TXT_SPEED_UP
+            // 
+            resources.ApplyResources(this.TXT_SPEED_UP, "TXT_SPEED_UP");
+            this.TXT_SPEED_UP.Name = "TXT_SPEED_UP";
+            this.TXT_SPEED_UP.Leave += new System.EventHandler(this.TXT_SPEED_UP_Leave);
+            // 
+            // TXT_LAND_SPEED_HIGH
+            // 
+            resources.ApplyResources(this.TXT_LAND_SPEED_HIGH, "TXT_LAND_SPEED_HIGH");
+            this.TXT_LAND_SPEED_HIGH.Name = "TXT_LAND_SPEED_HIGH";
+            this.TXT_LAND_SPEED_HIGH.Leave += new System.EventHandler(this.TXT_LAND_SPEED_HIGH_Leave);
+            // 
+            // TXT_RTL_ALT
+            // 
+            resources.ApplyResources(this.TXT_RTL_ALT, "TXT_RTL_ALT");
+            this.TXT_RTL_ALT.Name = "TXT_RTL_ALT";
+            this.TXT_RTL_ALT.Leave += new System.EventHandler(this.TXT_RTL_ALT_Leave);
             // 
             // chk_usemavftp
             // 
@@ -612,16 +717,6 @@ namespace MissionPlanner.GCSViews
             this.panelMap.Name = "panelMap";
             this.panelMap.Resize += new System.EventHandler(this.panelMap_Resize);
             // 
-            // lbl_estimated_time
-            // 
-            resources.ApplyResources(this.lbl_estimated_time, "lbl_estimated_time");
-            this.lbl_estimated_time.Name = "lbl_estimated_time";
-            // 
-            // lbl_3d_distance
-            // 
-            resources.ApplyResources(this.lbl_3d_distance, "lbl_3d_distance");
-            this.lbl_3d_distance.Name = "lbl_3d_distance";
-            // 
             // lbl_homedist
             // 
             resources.ApplyResources(this.lbl_homedist, "lbl_homedist");
@@ -631,6 +726,16 @@ namespace MissionPlanner.GCSViews
             // 
             resources.ApplyResources(this.lbl_prevdist, "lbl_prevdist");
             this.lbl_prevdist.Name = "lbl_prevdist";
+            // 
+            // lbl_estimated_time
+            // 
+            resources.ApplyResources(this.lbl_estimated_time, "lbl_estimated_time");
+            this.lbl_estimated_time.Name = "lbl_estimated_time";
+            // 
+            // lbl_3d_distance
+            // 
+            resources.ApplyResources(this.lbl_3d_distance, "lbl_3d_distance");
+            this.lbl_3d_distance.Name = "lbl_3d_distance";
             // 
             // Zoomlevel
             // 
@@ -724,6 +829,7 @@ namespace MissionPlanner.GCSViews
             // 
             // contextMenuStrip1
             // 
+            this.contextMenuStrip1.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.contextMenuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.deleteWPToolStripMenuItem,
             this.insertWpToolStripMenuItem,
@@ -1300,6 +1406,7 @@ namespace MissionPlanner.GCSViews
             // 
             // contextMenuStripPoly
             // 
+            this.contextMenuStripPoly.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.contextMenuStripPoly.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.addPolygonPointToolStripMenuItem,
             this.clearPolygonToolStripMenuItem,
@@ -1345,6 +1452,7 @@ namespace MissionPlanner.GCSViews
             // 
             // contextMenuStripZoom
             // 
+            this.contextMenuStripZoom.ImageScalingSize = new System.Drawing.Size(32, 32);
             this.contextMenuStripZoom.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.zoomToVehicleToolStripMenuItem,
             this.zoomToMissionToolStripMenuItem,
@@ -1767,5 +1875,19 @@ namespace MissionPlanner.GCSViews
         private NumericUpDown Zoomlevel;
         public Label lbl_estimated_time;
         public Label lbl_3d_distance;
+        public TextBox TXT_SPEED_DN;
+        public TextBox TXT_LAND_SPEED;
+        public TextBox TXT_SPEED;
+        public TextBox TXT_SPEED_UP;
+        public TextBox TXT_LAND_SPEED_HIGH;
+        public TextBox TXT_RTL_ALT;
+        public Label label12;
+        public Label label10;
+        public Label label9;
+        public Label label8;
+        public Label label7;
+        public Label label14;
+        public Label label13;
+        public TextBox TXT_LAND_ALT_LOW;
     }
 }

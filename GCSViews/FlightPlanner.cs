@@ -1485,13 +1485,13 @@ namespace MissionPlanner.GCSViews
                         //        FormatDistance(totalDistance / 1000.0, false);
                         // 初期値設定（パラメータが取得できなかった場合のデフォルト値）
                         bool terrainConsidered = true;
-                        double rtlAlt = 6000.0;            // RTL高度（cm）
-                        double horizontalSpeed = 1200.0;   // 水平速度（cm/s）
-                        double ascentSpeed = 250.0;        // 上昇速度（cm/s）
-                        double descentSpeed = 200.0;       // 下降速度（cm/s）
-                        double landSpeed = 150.0;          // LAND_SPEED（cm/s）
-                        double landSpeedHigh = 70.0;       // LAND_SPEED_HIGH（cm/s）
-                        double landAltLow = 1000.0;         // LAND_ALT_LOW（cm）
+                        double rtlAlt = double.Parse(TXT_RTL_ALT.Text);                // RTL高度（cm）
+                        double horizontalSpeed = double.Parse(TXT_SPEED.Text);         // 水平速度（cm/s）
+                        double ascentSpeed = double.Parse(TXT_SPEED_UP.Text);          // 上昇速度（cm/s）
+                        double descentSpeed = double.Parse(TXT_SPEED_DN.Text);         // 下降速度（cm/s）
+                        double landSpeed = double.Parse(TXT_LAND_SPEED.Text);          // LAND_SPEED（cm/s）
+                        double landSpeedHigh = double.Parse(TXT_LAND_SPEED_HIGH.Text); // LAND_SPEED_HIGH（cm/s）
+                        double landAltLow = double.Parse(TXT_LAND_ALT_LOW.Text);       // LAND_ALT_LOW（cm）
 
                         // 機体に接続しているか確認
                         if (MainV2.comPort.BaseStream.IsOpen)
@@ -8265,6 +8265,104 @@ Column 1: Field type (RALLY is the only one at the moment -- may have RALLY_LAND
             results += Environment.NewLine + Environment.NewLine + count + " tile" + (count > 1 ? "s" : "") + " loaded !";
             CustomMessageBox.Show("Number of tiles loaded per zoom : " + Environment.NewLine + results, "Injecting Custom Map Results");
             map.Dispose();
+        }
+
+        private void TXT_RTL_ALT_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_RTL_ALT.Text, out isNumber))
+            {
+                if (TXT_RTL_ALT.Text == "") TXT_RTL_ALT.Text = "6000";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_SPEED_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_RTL_ALT.Text, out isNumber))
+            {
+                if (TXT_SPEED.Text == "") TXT_SPEED.Text = "1000";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_SPEED_UP_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_SPEED_UP.Text, out isNumber))
+            {
+                if (TXT_SPEED_UP.Text == "") TXT_SPEED_UP.Text = "250";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_SPEED_DN_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_SPEED_DN.Text, out isNumber))
+            {
+                if (TXT_SPEED_DN.Text == "") TXT_SPEED_DN.Text = "200";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_LAND_SPEED_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_LAND_SPEED.Text, out isNumber))
+            {
+                if (TXT_LAND_SPEED.Text == "") TXT_LAND_SPEED.Text = "70";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_LAND_SPEED_HIGH_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_LAND_SPEED_HIGH.Text, out isNumber))
+            {
+                if (TXT_LAND_SPEED_HIGH.Text == "") TXT_LAND_SPEED_HIGH.Text = "150";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
+        }
+
+        private void TXT_LAND_ALT_LOW_Leave(object sender, EventArgs e)
+        {
+            float isNumber = 0;
+            if (!float.TryParse(TXT_LAND_ALT_LOW.Text, out isNumber))
+            {
+                if (TXT_LAND_ALT_LOW.Text == "") TXT_LAND_ALT_LOW.Text = "1000";
+            }
+
+            if (this.ActiveControl != null)
+            {
+                writeKML();
+            }
         }
     }
 }
