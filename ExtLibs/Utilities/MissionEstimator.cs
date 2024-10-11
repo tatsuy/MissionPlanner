@@ -310,7 +310,7 @@ namespace MissionPlanner.Utilities
                     // LANDコマンド: 現在位置から地面への垂直降下距離を計算
                     double landAltitude = GetCorrectedAltitude(home.Alt, currentCommand);
                     correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousWaypoint);
-                    distance = Math.Abs(correctedPreviousAlt - landAltitude);
+                    distance = -Math.Abs(correctedPreviousAlt - landAltitude);
                     if (distance > landAltLow)
                     {
                         CalculateSegmentFlightTime(0, distance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed, ref flightTime);
@@ -496,14 +496,13 @@ namespace MissionPlanner.Utilities
             totalRTLDistance += descentDistance;
             if (descentDistance > landAltLow)
             {
-                CalculateSegmentFlightTime(0, descentDistance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed, ref totalFlightTime);
-                CalculateSegmentFlightTime(0, landAltLow, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
+                CalculateSegmentFlightTime(0, landAltLow - descentDistance, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed, ref totalFlightTime);
+                CalculateSegmentFlightTime(0, -landAltLow, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
             }
             else
             {
-                CalculateSegmentFlightTime(0, descentDistance, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
+                CalculateSegmentFlightTime(0, -descentDistance, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
             }
-            totalFlightTime += descentDistance / descentSpeed;
             Console.WriteLine($"Descent Distance: {descentDistance} meters to land.");
 
             return (totalRTLDistance, totalFlightTime);
