@@ -1485,10 +1485,13 @@ namespace MissionPlanner.GCSViews
                         //        FormatDistance(totalDistance / 1000.0, false);
                         // 初期値設定（パラメータが取得できなかった場合のデフォルト値）
                         bool terrainConsidered = true;
-                        double rtlAlt = 60.0;        // RTL高度（メートル）
-                        double horizontalSpeed = 12.0;      // 水平速度（m/s）
-                        double ascentSpeed = 2.5;    // 上昇速度（m/s）
-                        double descentSpeed = 2.0;   // 下降速度（m/s）
+                        double rtlAlt = 6000.0;            // RTL高度（cm）
+                        double horizontalSpeed = 1200.0;   // 水平速度（cm/s）
+                        double ascentSpeed = 250.0;        // 上昇速度（cm/s）
+                        double descentSpeed = 200.0;       // 下降速度（cm/s）
+                        double landSpeed = 150.0;          // LAND_SPEED（cm/s）
+                        double landSpeedHigh = 70.0;       // LAND_SPEED_HIGH（cm/s）
+                        double landAltLow = 1000.0;         // LAND_ALT_LOW（cm）
 
                         // 機体に接続しているか確認
                         if (MainV2.comPort.BaseStream.IsOpen)
@@ -1498,11 +1501,14 @@ namespace MissionPlanner.GCSViews
                             // パラメータ名とデフォルト値をマッピング
                             var parameterMappings = new Dictionary<string, double>
                             {
-                                { "RTL_ALT", 60.0 },
-                                { "WPNAV_SPEED", 12.0 },
-                                { "WPNAV_SPEED_UP", 2.5 },
-                                { "WPNAV_SPEED_DN", 2.0 },
-                                { "RTL_ALT_TYPE", 1.0 } // 1.0: 使用, 0.0: 不使用
+                                { "RTL_ALT", 6000.0 },
+                                { "WPNAV_SPEED", 1200.0 },
+                                { "WPNAV_SPEED_UP", 250.0 },
+                                { "WPNAV_SPEED_DN", 200.0 },
+                                { "RTL_ALT_TYPE", 1.0 },       // 1.0: 使用, 0.0: 不使用
+                                { "LAND_ALT_LOW", 1000.0 },
+                                { "LAND_SPEED", 150.0 },
+                                { "LAND_SPEED_HIGH", 70.0 },
                             };
 
                             foreach (var param in parameterMappings.Keys.ToList())
@@ -1527,6 +1533,15 @@ namespace MissionPlanner.GCSViews
                                         case "RTL_ALT_TYPE":
                                             terrainConsidered = value > 0.0;
                                             break;
+                                        case "LAND_ALT_LOW":
+                                            landAltLow = value;
+                                            break;
+                                        case "LAND_SPEED":
+                                            landSpeed = value;
+                                            break;
+                                        case "LAND_SPEED_HIGH":
+                                            landSpeedHigh = value;
+                                            break;
                                     }
                                 }
                                 else
@@ -1543,10 +1558,13 @@ namespace MissionPlanner.GCSViews
                             home,
                             wpCommandList,
                             terrainConsidered,
-                            rtlAlt,
-                            horizontalSpeed,
-                            ascentSpeed,
-                            descentSpeed
+                            rtlAlt * 0.01,          // cm to m
+                            horizontalSpeed * 0.01, // cm/s to m/s
+                            ascentSpeed * 0.01,    // cm/s to m/s
+                            descentSpeed * 0.01,   // cm/s to m/s
+                            landSpeed * 0.01,      // cm/s to m/s
+                            landSpeedHigh * 0.01,  // cm/s to m/s
+                            landAltLow * 0.01      // cm to m
                         );
 
                         // ラベルに3D距離を表示
