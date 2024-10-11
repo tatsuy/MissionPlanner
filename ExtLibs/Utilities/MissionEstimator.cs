@@ -5,6 +5,7 @@ using System.Linq;
 using MissionPlanner.Utilities; // srtm クラスを使用するための using
 using System.Threading.Tasks; // パラレル処理のための using
 using System.Collections.Concurrent;
+using LibVLC.NET;
 
 namespace MissionPlanner.Utilities
 {
@@ -129,7 +130,8 @@ namespace MissionPlanner.Utilities
             double descentSpeed,   // 下降速度（m/s）
             double landSpeed,      // LAND_SPEED（m/s）
             double landSpeedHigh,  // LAND_SPEED_HIGH（m/s）
-            double landAltLow      // LAND_ALT_LOW（m）
+            double landAltLow,     // LAND_ALT_LOW（m）
+            List<(PointLatLngAlt Start, PointLatLngAlt End)> bottleneckSegments
             )
         {
             if (!wpCommandList.Any())
@@ -156,7 +158,7 @@ namespace MissionPlanner.Utilities
             foreach (var currentCommand in wpCommandList)
             {
                 // 通常の距離計算を行う
-                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, ref horizontalSpeed, ref ascentSpeed, ref descentSpeed, landSpeed, landSpeedHigh, landAltLow);
+                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, ref horizontalSpeed, ref ascentSpeed, ref descentSpeed, landSpeed, landSpeedHigh, landAltLow, bottleneckSegments);
                 totalDistance += distance;
                 totalEstimatedTimeSeconds += estimatedFlightTime;
 
@@ -184,7 +186,8 @@ namespace MissionPlanner.Utilities
             ref double descentSpeed,   // 下降速度（m/s）
             double landSpeed,      // LAND_SPEED（m/s）
             double landSpeedHigh,  // LAND_SPEED_HIGH（m/s）
-            double landAltLow      // LAND_ALT_LOW（m）
+            double landAltLow,     // LAND_ALT_LOW（m）
+            List<(PointLatLngAlt Start, PointLatLngAlt End)> bottleneckSegments
             )
         {
             double distance = 0.0;
@@ -249,8 +252,10 @@ namespace MissionPlanner.Utilities
 
                                 double horizontalSampleDistance = currentSample.GetDistance(previousSample);
                                 double verticalSampleDistance = currentSample.Alt - previousSample.Alt;
-                                double segmentTime = CalculateSegmentFlightTime(horizontalSampleDistance, verticalSampleDistance, horizontalSpeed, ascentSpeed, descentSpeed);
-                                flightTime += segmentTime;
+                                if (CalculateSegmentFlightTime(horizontalSampleDistance, verticalSampleDistance, horizontalSpeed, ascentSpeed, descentSpeed, ref flightTime))
+                                {
+                                    bottleneckSegments.Add((Start: previousSample, End: currentSample));
+                                }
 
                                 Console.WriteLine($"Sampled Point1 ({previousSample.Lat}, {previousSample.Lng}, {previousSample.Alt}) " +
                                                   $"Point2 ({currentSample.Lat}, {currentSample.Lng}, {currentSample.Alt}) Distance: {distance}");
@@ -273,7 +278,10 @@ namespace MissionPlanner.Utilities
 
                         double horizontalDistance = currentPoint.GetDistance(previousPoint);
                         double verticalSegmentDistance = currentPoint.Alt - previousPoint.Alt;
-                        flightTime = CalculateSegmentFlightTime(horizontalDistance, verticalSegmentDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                        if (CalculateSegmentFlightTime(horizontalDistance, verticalSegmentDistance, horizontalSpeed, ascentSpeed, descentSpeed, ref flightTime))
+                        {
+                            bottleneckSegments.Add((Start: previousPoint, End: currentPoint));
+                        }
                     }
                     if (currentCommand.lat != 0.0 && currentCommand.lng != 0.0)
                     {
@@ -295,7 +303,7 @@ namespace MissionPlanner.Utilities
 
                     distance = Math.Abs(correctedCurrentAlt - correctedPreviousAlt);
                     double verticalDistance = correctedCurrentAlt - correctedPreviousAlt;
-                    flightTime = CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                    CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed, ref flightTime);
                     break;
 
                 case (int)MAVLink.MAV_CMD.LAND:
@@ -305,19 +313,18 @@ namespace MissionPlanner.Utilities
                     distance = Math.Abs(correctedPreviousAlt - landAltitude);
                     if (distance > landAltLow)
                     {
-                        flightTime += CalculateSegmentFlightTime(0, distance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed);
-                        flightTime += CalculateSegmentFlightTime(0, landAltLow, horizontalSpeed, ascentSpeed, landSpeed);
+                        CalculateSegmentFlightTime(0, distance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed, ref flightTime);
+                        CalculateSegmentFlightTime(0, landAltLow, horizontalSpeed, ascentSpeed, landSpeed, ref flightTime);
                     }
                     else
                     {
-                        verticalDistance = landAltitude - correctedPreviousAlt;
-                        flightTime += CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, landSpeed);
+                        CalculateSegmentFlightTime(0, distance, horizontalSpeed, ascentSpeed, landSpeed, ref flightTime);
                     }
                     break;
 
                 case (int)MAVLink.MAV_CMD.RETURN_TO_LAUNCH:
                     // RETURN_TO_LAUNCHコマンドの処理
-                    (distance, flightTime) = CalculateRTLDistance(home, previousWaypoint, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed);
+                    (distance, flightTime) = CalculateRTLDistance(home, previousWaypoint, currentCommand, isTerrain, rtlAltitude, horizontalSpeed, ascentSpeed, descentSpeed, landSpeed, landSpeedHigh, landAltLow, bottleneckSegments);
                     break;
 
                 case (int)MAVLink.MAV_CMD.DO_CHANGE_SPEED:
@@ -372,13 +379,14 @@ namespace MissionPlanner.Utilities
             return (distance, flightTime);
         }
 
-        private static double CalculateSegmentFlightTime(double horizontalDistance, double verticalDistance, double horizontalSpeed, double ascentSpeed, double descentSpeed)
+        private static bool CalculateSegmentFlightTime(double horizontalDistance, double verticalDistance, double horizontalSpeed, double ascentSpeed, double descentSpeed, ref double estimatedTime)
         {
             double horizontalTime = horizontalDistance / horizontalSpeed;
             double verticalTime = verticalDistance > 0
                 ? verticalDistance / ascentSpeed
                 : -verticalDistance / descentSpeed;
-            return Math.Max(horizontalTime, verticalTime);
+            estimatedTime +=  Math.Max(horizontalTime, verticalTime);
+            return horizontalTime > 0 && verticalTime > 0 && verticalTime > horizontalTime;
         }
 
         /// <summary>
@@ -389,10 +397,14 @@ namespace MissionPlanner.Utilities
             Locationwp previousCommand,
             Locationwp currentCommand,
             bool isTerrain,
-            double rtlAltitude = 60.0,
-            double horizontalSpeed = 10.0, // m/s
-            double ascentSpeed = 2.5,      // m/s
-            double descentSpeed = 2.5      // m/s
+            double rtlAltitude,
+            double horizontalSpeed, // m/s
+            double ascentSpeed,      // m/s
+            double descentSpeed,     // m/s
+            double landSpeed,      // LAND_SPEED（m/s）
+            double landSpeedHigh,  // LAND_SPEED_HIGH（m/s）
+            double landAltLow,     // LAND_ALT_LOW（m）
+            List<(PointLatLngAlt Start, PointLatLngAlt End)> bottleneckSegments
             )
         {
             double totalRTLDistance = 0.0;
@@ -453,8 +465,10 @@ namespace MissionPlanner.Utilities
 
                         double horizontalDistance = sampledPoint.GetDistance(previousPoint);
                         double verticalDistance = sampledPoint.Alt - previousPoint.Alt;
-                        double segmentTime = CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
-                        totalFlightTime += segmentTime;
+                        if (CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed, ref totalFlightTime))
+                        {
+                            bottleneckSegments.Add((Start: previousPoint, End: sampledPoint));
+                        }
 
                         Console.WriteLine($"Sampled Point1 ({previousPoint.Lat}, {previousPoint.Lng}, {previousPoint.Alt}) " +
                                           $"Point2 ({sampledPoint.Lat}, {sampledPoint.Lng}, {sampledPoint.Alt}) Distance: {distance}");
@@ -472,8 +486,7 @@ namespace MissionPlanner.Utilities
                 double horizontalDistance = currentAtDesiredAlt.GetDistance(homeAtDesiredAlt);
                 double verticalDistance = homeAtDesiredAlt.Alt - currentAtDesiredAlt.Alt;
 
-                double segmentTime = CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
-                totalFlightTime += segmentTime;
+                CalculateSegmentFlightTime(horizontalDistance, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed, ref totalFlightTime);
 
                 Console.WriteLine($"Straight Line Distance: {distance} meters.");
             }
@@ -481,6 +494,15 @@ namespace MissionPlanner.Utilities
             // 3. 降下
             double descentDistance = rtlAltitude; // ホームポイントは地面にあると仮定
             totalRTLDistance += descentDistance;
+            if (descentDistance > landAltLow)
+            {
+                CalculateSegmentFlightTime(0, descentDistance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed, ref totalFlightTime);
+                CalculateSegmentFlightTime(0, landAltLow, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
+            }
+            else
+            {
+                CalculateSegmentFlightTime(0, descentDistance, horizontalSpeed, ascentSpeed, landSpeed, ref totalFlightTime);
+            }
             totalFlightTime += descentDistance / descentSpeed;
             Console.WriteLine($"Descent Distance: {descentDistance} meters to land.");
 
