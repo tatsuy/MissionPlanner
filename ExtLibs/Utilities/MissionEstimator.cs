@@ -123,10 +123,13 @@ namespace MissionPlanner.Utilities
             PointLatLngAlt home,
             List<Locationwp> wpCommandList,
             bool isTerrain,
-            double rtlAltitude = 60.0,
-            double horizontalSpeed = 10.0, // m/s
-            double ascentSpeed = 2.5,      // m/s
-            double descentSpeed = 2.5      // m/s
+            double rtlAltitude,
+            double horizontalSpeed, // 水平速度（m/s）
+            double ascentSpeed,    // 上昇速度（m/s）
+            double descentSpeed,   // 下降速度（m/s）
+            double landSpeed,      // LAND_SPEED（m/s）
+            double landSpeedHigh,  // LAND_SPEED_HIGH（m/s）
+            double landAltLow      // LAND_ALT_LOW（m）
             )
         {
             if (!wpCommandList.Any())
@@ -153,7 +156,7 @@ namespace MissionPlanner.Utilities
             foreach (var currentCommand in wpCommandList)
             {
                 // 通常の距離計算を行う
-                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, ref horizontalSpeed, ref ascentSpeed, ref descentSpeed);
+                (double distance, double estimatedFlightTime) = CalculateDistanceAndFlightTimeForCommand(home, currentCommand, ref previousWaypoint, previousCommand, isTerrain, rtlAltitude, ref horizontalSpeed, ref ascentSpeed, ref descentSpeed, landSpeed, landSpeedHigh, landAltLow);
                 totalDistance += distance;
                 totalEstimatedTimeSeconds += estimatedFlightTime;
 
@@ -176,9 +179,12 @@ namespace MissionPlanner.Utilities
             Locationwp previousCommand,
             bool isTerrain,
             double rtlAltitude,
-            ref double horizontalSpeed, // m/s
-            ref double ascentSpeed,      // m/s
-            ref double descentSpeed      // m/s
+            ref double horizontalSpeed, // 水平速度（m/s）
+            ref double ascentSpeed,    // 上昇速度（m/s）
+            ref double descentSpeed,   // 下降速度（m/s）
+            double landSpeed,      // LAND_SPEED（m/s）
+            double landSpeedHigh,  // LAND_SPEED_HIGH（m/s）
+            double landAltLow      // LAND_ALT_LOW（m）
             )
         {
             double distance = 0.0;
@@ -297,8 +303,16 @@ namespace MissionPlanner.Utilities
                     double landAltitude = GetCorrectedAltitude(home.Alt, currentCommand);
                     correctedPreviousAlt = GetCorrectedAltitude(home.Alt, previousWaypoint);
                     distance = Math.Abs(correctedPreviousAlt - landAltitude);
-                    verticalDistance = landAltitude - correctedPreviousAlt;
-                    flightTime = CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, descentSpeed);
+                    if (distance > landAltLow)
+                    {
+                        flightTime += CalculateSegmentFlightTime(0, distance - landAltLow, horizontalSpeed, ascentSpeed, landSpeedHigh > 0 ? landSpeedHigh : descentSpeed);
+                        flightTime += CalculateSegmentFlightTime(0, landAltLow, horizontalSpeed, ascentSpeed, landSpeed);
+                    }
+                    else
+                    {
+                        verticalDistance = landAltitude - correctedPreviousAlt;
+                        flightTime += CalculateSegmentFlightTime(0, verticalDistance, horizontalSpeed, ascentSpeed, landSpeed);
+                    }
                     break;
 
                 case (int)MAVLink.MAV_CMD.RETURN_TO_LAUNCH:
