@@ -1478,13 +1478,76 @@ namespace MissionPlanner.GCSViews
                     // ホームポイントから最初のウェイポイントまでの3D距離を計算
                     if (wpCommandList.Any())
                     {
-                        // double totalDistance = MissionEstimator.CalculateTotal3DDistance(home, wpCommandList);
+                        //double totalDistance = MissionEstimator.CalculateTotal3DDistance(home, wpCommandList);
 
-                        // ラベルに3D距離を表示
-                        //lbl_distance.Text = rm.GetString("lbl_distance.Text") + ": " +
+                        ////ラベルに3D距離を表示
+                        //lbl_3d_distance.Text = rm.GetString("lbl_3d_distance.Text") + ": " +
                         //        FormatDistance(totalDistance / 1000.0, false);
+                        // 初期値設定（パラメータが取得できなかった場合のデフォルト値）
+                        bool terrainConsidered = true;
+                        double rtlAlt = 60.0;        // RTL高度（メートル）
+                        double horizontalSpeed = 12.0;      // 水平速度（m/s）
+                        double ascentSpeed = 2.5;    // 上昇速度（m/s）
+                        double descentSpeed = 2.0;   // 下降速度（m/s）
 
-                        (double totalDistance3D, double estimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(home, wpCommandList, true, 60, 10, 2.5, 2.5);
+                        // 機体に接続しているか確認
+                        if (MainV2.comPort.BaseStream.IsOpen)
+                        {
+                            var paramsList = MainV2.comPort.MAV.param;
+
+                            // パラメータ名とデフォルト値をマッピング
+                            var parameterMappings = new Dictionary<string, double>
+                            {
+                                { "RTL_ALT", 60.0 },
+                                { "WPNAV_SPEED", 12.0 },
+                                { "WPNAV_SPEED_UP", 2.5 },
+                                { "WPNAV_SPEED_DN", 2.0 },
+                                { "RTL_ALT_TYPE", 1.0 } // 1.0: 使用, 0.0: 不使用
+                            };
+
+                            foreach (var param in parameterMappings.Keys.ToList())
+                            {
+                                if (paramsList.ContainsKey(param))
+                                {
+                                    double value = paramsList[param].Value;
+                                    switch (param)
+                                    {
+                                        case "RTL_ALT":
+                                            rtlAlt = value;
+                                            break;
+                                        case "WPNAV_SPEED":
+                                            horizontalSpeed = value;
+                                            break;
+                                        case "WPNAV_SPEED_UP":
+                                            ascentSpeed = value;
+                                            break;
+                                        case "WPNAV_SPEED_DN":
+                                            descentSpeed = value;
+                                            break;
+                                        case "RTL_ALT_TYPE":
+                                            terrainConsidered = value > 0.0;
+                                            break;
+                                    }
+                                }
+                                else
+                                {
+                                    Console.WriteLine($"Parameter {param} not found. Using default value {parameterMappings[param]}.");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine("機体に接続されていません。デフォルト値を使用します。");
+                        }
+                        (double totalDistance3D, double estimatedFlightTime) = MissionEstimator.CalculateTotal3DDistanceWithTerrain(
+                            home,
+                            wpCommandList,
+                            terrainConsidered,
+                            rtlAlt,
+                            horizontalSpeed,
+                            ascentSpeed,
+                            descentSpeed
+                        );
 
                         // ラベルに3D距離を表示
                         lbl_3d_distance.Text = rm.GetString("lbl_3d_distance.Text") + ": " +
