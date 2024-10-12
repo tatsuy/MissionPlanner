@@ -1387,7 +1387,7 @@ namespace MissionPlanner.GCSViews
             PointLatLngAlt home = PointLatLngAlt.Zero;
             var wpRadius = 0.0;
             var loiterRadius = 0.0;
-            if (overlayId == "wp")
+            if (overlayId == "WPOverlay")
             {
                 if (TXT_homealt.Text != "" && TXT_homelat.Text != "" && TXT_homelng.Text != "")
                 {
@@ -1426,7 +1426,7 @@ namespace MissionPlanner.GCSViews
                 if (isEditable)
                 {
                     // Store command list for waypoints, fences, and rally points
-                    if (overlayId == "wp") wpCommandList = commandlist;
+                    if (overlayId == "WPOverlay") wpCommandList = commandlist;
                     else if (overlayId == "fence") fenceCommandList = commandlist;
                     else if (overlayId == "rally") rallyCommandList = commandlist;
                 }
@@ -1436,7 +1436,7 @@ namespace MissionPlanner.GCSViews
                     else
                     {
                         // Use the stored command list if not connected to vehicle
-                        if (overlayId == "wp") commandlist = wpCommandList;
+                        if (overlayId == "WPOverlay") commandlist = wpCommandList;
                         else if (overlayId == "fence") commandlist = fenceCommandList;
                         else if (overlayId == "rally") commandlist = rallyCommandList;
                     }
@@ -1456,7 +1456,7 @@ namespace MissionPlanner.GCSViews
             if (existingOverlay != null)
                 MainMap.Overlays.Remove(existingOverlay);
 
-            if (isEditable || overlayId == "wp")
+            if (isEditable || overlayId == "WPOverlay")
                 MainMap.Overlays.Add(overlay.overlay);
             else
                 MainMap.Overlays.Insert(MainMap.Overlays.Count - 1, overlay.overlay);
@@ -1464,7 +1464,7 @@ namespace MissionPlanner.GCSViews
             // Update the overlay to reflect any changes
             overlay.overlay.ForceUpdate();
 
-            if (overlayId == "wp" && isEditable)
+            if (overlayId == "WPOverlay" && isEditable)
             {
                 if (isEditable)
                 {
@@ -1651,7 +1651,7 @@ namespace MissionPlanner.GCSViews
                 MainMap.HoldInvalidation = true;
 
                 // Create overlays for each type, setting editability accordingly
-                CreateAndDisplayOverlay("wp", MainV2.comPort.MAV.wps.Values.Skip(1).ToList(), isMissionEditable);
+                CreateAndDisplayOverlay("WPOverlay", MainV2.comPort.MAV.wps.Values.Skip(1).ToList(), isMissionEditable);
                 CreateAndDisplayOverlay("fence", MainV2.comPort.MAV.fencepoints.Values.ToList(), isFenceEditable);
                 CreateAndDisplayOverlay("rally", MainV2.comPort.MAV.rallypoints.Values.ToList(), isRallyEditable);
 
@@ -4737,9 +4737,9 @@ namespace MissionPlanner.GCSViews
 
                     try
                     {
-                        if (dtOriginal.Columns.Contains("wp"))
+                        if (dtOriginal.Columns.Contains("WPOverlay"))
                         {
-                            wp = (float) Convert.ChangeType(dtOriginal.Rows[row]["wp"], TypeCode.Single);
+                            wp = (float) Convert.ChangeType(dtOriginal.Rows[row]["WPOverlay"], TypeCode.Single);
                             dosort = true;
                         }
                     }
